@@ -13,6 +13,7 @@
 #include "base/AsyncCallbacks.h"
 #include "base/IoManip.h"
 #include "CachePeer.h"
+#include "client_side.h"
 #include "comm/Loops.h"
 #include "comm/Read.h"
 #include "Downloader.h"
@@ -93,7 +94,10 @@ Security::PeerConnector::fillChecklist(ACLFilledChecklist &checklist) const
     if (!checklist.al)
         checklist.al = al;
     checklist.syncAle(request.getRaw(), nullptr);
-    // checklist.fd(fd); XXX: need client FD here
+    if (const auto mgr = request->clientConnectionManager.valid()) {
+        if (mgr->clientConnection && Comm::IsConnOpen(mgr->clientConnection))
+            checklist.fd(mgr->clientConnection->fd);
+    }
 
 #if USE_OPENSSL
     if (!checklist.serverCert) {
@@ -161,14 +165,25 @@ Security::PeerConnector::initialize(Security::SessionPointer &serverSession)
 
 #if USE_OPENSSL
     // If CertValidation Helper used do not lookup checklist for errors,
-    // but keep a list of errors to send it to CertValidator
-    if (!Ssl::TheConfig.ssl_crt_validator) {
-        // Create the ACL check list now, while we have access to more info.
-        // The list is used in ssl_verify_cb() and is freed in ssl_free().
-        // XXX: This info may change, especially if we fetch missing certs.
-        // TODO: Remove ACLFilledChecklist::sslErrors and other pre-computed
-        // state in favor of the ACLs accessing current/fresh info directly.
-        if (acl_access *acl = ::Config.ssl_client.cert_error) {
+        // but keep a list of errors to send it to CertValidator
+        if (!Ssl::TheConfig.ssl_crt_validator) {
+            // Create the ACL check list now, while we have access to more info.
+            // The list is used in ssl_verify_cb() and is freed in ssl_free().
+            //
+            // KNOWN LIMITATION: This pre-computed checklist becomes stale if
+            // we later fetch missing intermediate certificates. When that happens,
+            // the sslErrors accumulated during the first validation attempt may
+            // no longer accurately reflect the current chain. Specifically:
+            //   - A cert error that would be resolved by the fetched cert remains
+            //     in the pre-computed sslErrors list
+            //   - ssl_verify_cb() evaluates sslproxy_cert_error ACL against stale
+            //     error data, potentially causing false-accept or false-reject
+            //
+            // TODO: Remove ACLFilledChecklist::sslErrors and other pre-computed
+            // state in favor of the ACLs accessing current/fresh info directly.
+            // This requires refactoring ssl_verify_cb() to construct a fresh
+            // checklist per invocation rather than reusing the stored one.
+            if (acl_access *acl = ::Config.ssl_client.cert_error) {
             auto check = ACLFilledChecklist::Make(acl, request.getRaw());
             fillChecklist(*check);
             SSL_set_ex_data(serverSession.get(), ssl_ex_index_cert_error_check, check.release());
