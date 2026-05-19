@@ -16,7 +16,7 @@
 
 ## Detailed Findings
 
-### 1. obs-fold on Content-Length Accepted (HIGH)
+### 1. obs-fold on Content-Length/Transfer-Encoding Accepted (HIGH)
 
 **Vector**: `obs-fold-cl` — Content-Length value on a continuation line:
 ```
@@ -24,11 +24,26 @@ Content-Length:\r\n
  100\r\n
 ```
 
-**Expected**: Squid rejects with 400 (obs-fold on framing headers is dangerous per RFC 9110 §5.5).
+**Expected**: Squid rejects with 400 (RFC 9112 §5.1 declares this malformed).
 
-**Actual**: Squid unfolds the continuation line and forwards `Content-Length: 100` as a normal header. This happens in **all three modes** (relaxed, strict, and warn).
+**Actual**: Squid unfolds the continuation line and forwards `Content-Length: 100` as a normal header. This happens in **all three modes** (relaxed, strict, and warn). Transfer-Encoding obs-fold is also accepted.
 
-**Why it matters**: If Squid accepts obs-folded Content-Length but a downstream backend or CDN does not recognize the folded form, they will disagree on the body length. An attacker could use this to desynchronize message boundaries — the classic request smuggling primitive.
+**Root cause**: `Http::One::Parser::unfoldMime()` replaces obs-fold with SP **before** `HttpHeader::parse()` checks for obs-fold on framing headers. The defense at `HttpHeader.cc:590-598` checks `lines > 1`, but after unfolding the header is a single line, so the check never fires. The defense exists but is unreachable — `unfoldMime()` destroys the evidence.
+
+Code flow:
+1. `headersEnd()` → sets `containsObsFold = true`
+2. `grabMimeBlock()` → calls `unfoldMime()` → `Content-Length:\r\n 100` becomes `Content-Length: 100`
+3. `HttpHeader::parse()` → sees single-line `Content-Length: 100` → `lines == 1` → skips rejection
+
+Contrast with bare CR: the `hasBareCr` path works because bare CRs are handled in `HttpHeader::parse()` itself (lines 543-558), not erased by `unfoldMime()`.
+
+**Attack scenario**: HTTP request smuggling when Squid is behind a front-end proxy that doesn't unfold obs-fold:
+```
+Attacker → Front-end (sees no valid CL → body=0) → Squid (unfolds → CL=N) → Backend
+```
+The front-end treats the "body" bytes as a second request (the smuggled request).
+
+**PoC**: `poc_obs_fold_smuggle.py` demonstrates the full attack with embedded smuggled request. `reproducer_obs_fold_cl.py` is a minimal 4-test reproducer.
 
 **Raw evidence** (what Squid forwarded to echo-raw):
 ```
@@ -41,7 +56,11 @@ Connection: keep-alive\r\n
 XXXX...  (100 bytes)
 ```
 
-**Recommendation**: Reject requests with obs-folded Content-Length or Transfer-Encoding headers, regardless of `relaxed_header_parser` setting. This is arguably a bug — even in relaxed mode, framing headers should not be accepted with obs-fold syntax.
+**Recommendation**: Reject requests with obs-folded Content-Length or Transfer-Encoding headers in all parser modes. Fix: scan for framing header names before unfolding, or pass `containsObsFold` flag to `HttpHeader::parse()`.
+
+**RFC references**: RFC 9112 §5.1, RFC 9110 §5.5, RFC 7230 §3.2.4.
+
+**Bugzilla report**: `BUGZILLA_REPORT_obs_fold_cl.md`
 
 ### 2. %00 in URL Forwarded Unsanitized (MEDIUM)
 
