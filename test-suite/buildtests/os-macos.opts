@@ -1,0 +1,60 @@
+#!/bin/sh
+#
+## Copyright (C) 1996-2026 The Squid Software Foundation and contributors
+##
+## Squid software is distributed under GPLv2+ license and includes
+## contributions from numerous individuals and organizations.
+## Please see the COPYING and CONTRIBUTORS files for details.
+##
+
+#
+MAKETEST="check installcheck uninstallcheck"
+#
+#
+# Configure options for macOS (Homebrew on Apple Silicon / ARM64)
+#
+# macOS ships deprecated versions of Kerberos, LDAP, and SASL whose
+# deprecation warnings break -Werror builds. This opts file points at
+# Homebrew-provided replacements and disables strict error checking.
+#
+# Prerequisites (install via Homebrew):
+#   brew install autoconf automake libtool pkg-config
+#   brew install openssl@3 nettle cppunit
+#   brew install krb5 openldap
+#
+# NP: DISTCHECK_CONFIGURE_FLAGS is a magic automake macro for the
+#     distcheck target recursive tests between scripted runs.
+#     we use it to perform the same duty between our nested scripts.
+
+# Homebrew prefix (arm64 = /opt/homebrew, x86_64 = /usr/local)
+HOMEBREW_PREFIX="${HOMEBREW_PREFIX:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)}"
+SDK_PATH="$(xcrun --show-sdk-path 2>/dev/null || echo /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk)"
+
+DISTCHECK_CONFIGURE_FLAGS=" \
+	--prefix=/usr/local/squid \
+	--with-openssl=${HOMEBREW_PREFIX}/opt/openssl@3 \
+	--enable-arch-native \
+	--enable-ssl-crtd \
+	--enable-icap-client \
+	--disable-strict-error-checking \
+	--enable-storeio=ufs,diskd \
+	--enable-removal-policies=lru,heap \
+	--enable-delay-pools \
+	--enable-cache-digests \
+	--enable-snmp \
+	--enable-htcp \
+	--enable-carp \
+	--with-large-files \
+	--enable-follow-x-forwarded-for \
+	--enable-auth \
+	CPPUNIT_CFLAGS=-I${HOMEBREW_PREFIX}/include \
+	CPPUNIT_LIBS=\"-L${HOMEBREW_PREFIX}/lib -lcppunit\" \
+	LIBMIT_KRB5_CFLAGS=-I${HOMEBREW_PREFIX}/opt/krb5/include \
+	LIBMIT_KRB5_LIBS=\"-L${HOMEBREW_PREFIX}/opt/krb5/lib -lkrb5\" \
+	LIBGSS_CFLAGS=-I${HOMEBREW_PREFIX}/opt/krb5/include \
+	LIBGSS_LIBS=\"-L${HOMEBREW_PREFIX}/opt/krb5/lib -lgssapi_krb5\" \
+	LIBLDAP_CFLAGS=-I${HOMEBREW_PREFIX}/opt/openldap/include \
+	LIBLDAP_LIBS=\"-L${HOMEBREW_PREFIX}/opt/openldap/lib -lldap -llber\" \
+	LIBSASL_CFLAGS=-I${SDK_PATH}/usr/include \
+	LIBSASL_LIBS=-lsasl2 \
+"
