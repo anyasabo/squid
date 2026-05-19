@@ -32,6 +32,7 @@ class TestHttp1Parser : public CPPUNIT_NS::TestFixture
     CPPUNIT_TEST(testParseRequestLineTerminators);
     CPPUNIT_TEST(testParseRequestLineStrange);
     CPPUNIT_TEST(testParseRequestLineInvalid);
+    CPPUNIT_TEST(testObsFoldOnFramingHeaders);
     CPPUNIT_TEST_SUITE_END();
 
 protected:
@@ -47,6 +48,8 @@ protected:
     void testParseRequestLineInvalid();      // rejection of invalid lines happens
 
     void testDripFeed();  // test incremental parse works
+
+    void testObsFoldOnFramingHeaders();  // obs-fold on CL/TE must be rejected (RFC 9112 §5.1)
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION( TestHttp1Parser );
@@ -1192,6 +1195,145 @@ TestHttp1Parser::testDripFeed()
 
     } while (Config.onoff.relaxed_header_parser);
 
+}
+
+/// Regression tests for PR #701 obs-fold defense bypass.
+/// unfoldMime() erases obs-fold before HttpHeader::parse() checks for it on
+/// framing headers. These tests exercise the full RequestParser pipeline to
+/// verify that obs-fold on Content-Length and Transfer-Encoding is rejected.
+/// See RFC 9112 §5.1: messages with obs-fold on framing headers are malformed.
+void
+TestHttp1Parser::testObsFoldOnFramingHeaders()
+{
+    globalSetup();
+
+    SBuf input;
+    Http1::RequestParser output;
+
+    // obs-fold on Content-Length MUST be rejected in strict mode
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length:\r\n"
+            " 5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Content-Length MUST also be rejected in relaxed mode
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length:\r\n"
+            " 5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Transfer-Encoding MUST be rejected
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Transfer-Encoding:\r\n"
+            " chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n0\r\n\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on non-framing header should be accepted (control test)
+    {
+        input = SBuf(
+            "GET /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "X-Custom:\r\n"
+            " value\r\n"
+            "\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = true,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scOkay,
+            .suffixSz = 0,
+            .method = HttpRequestMethod(Http::METHOD_GET),
+            .uri = "/test",
+            .version = AnyP::ProtocolVersion(AnyP::PROTO_HTTP,1,1)
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // bare CR on Content-Length should be rejected (control: existing defense works)
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length: \r5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    Config.onoff.relaxed_header_parser = 0; // restore strict default
 }
 
 int

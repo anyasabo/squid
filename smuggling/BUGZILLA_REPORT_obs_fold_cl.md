@@ -193,6 +193,116 @@ Where `mimeHasObsFoldedFramingHeader()` scans the raw (pre-unfold) header
 block for `Content-Length:` or `Transfer-Encoding:` lines where the value
 continues on the next line with leading whitespace.
 
+## Proposed Regression Tests
+
+PR #701 had no test verifying the obs-fold rejection actually fires
+through the full parser pipeline. Adding these tests to
+`src/tests/testHttp1Parser.cc` would have caught the bug at commit time,
+and will prevent regressions in the fix.
+
+The tests exercise `Http1::RequestParser::parse()` — the entry point
+that runs both `grabMimeBlock()` → `unfoldMime()` and then
+`HttpHeader::parse()`. Testing at this level catches pipeline ordering
+bugs that unit tests against `HttpHeader::parse()` alone would miss.
+
+```cpp
+void
+TestHttp1Parser::testObsFoldOnFramingHeaders()
+{
+    globalSetup();
+    SBuf input;
+    Http1::RequestParser output;
+
+    // obs-fold on Content-Length MUST be rejected (strict mode)
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length:\r\n"
+            " 5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Content-Length MUST also be rejected (relaxed mode)
+    {
+        input = SBuf(/* same payload */);
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = { /* same: .status = Http::scBadRequest */ };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Transfer-Encoding MUST be rejected
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Transfer-Encoding:\r\n"
+            " chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n0\r\n\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = { /* .status = Http::scBadRequest */ };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // Control: obs-fold on non-framing header should be accepted
+    {
+        input = SBuf(
+            "GET /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "X-Custom:\r\n"
+            " value\r\n"
+            "\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = { .parsed = true, .status = Http::scOkay };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // Control: bare CR on CL rejected (existing defense works)
+    {
+        input = SBuf("POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length: \r5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = { /* .status = Http::scBadRequest */ };
+        testResults(__LINE__, input, output, expect);
+    }
+}
+```
+
+The full implementation is available in `src/tests/testHttp1Parser.cc` on
+our fork's `http-smuggling-tests` branch.
+
+**Why this would have caught the bug**: The existing `testHttp1Parser.cc`
+only tests request-line parsing. It has zero tests for header-level
+rejections. Adding obs-fold-on-CL tests as part of PR #701 would have
+immediately shown that `parse()` returns `scOkay` instead of
+`scBadRequest`, revealing the `unfoldMime()` ordering issue.
+
 ## Impact
 
 - **HTTP request smuggling**: enables CL-based desync when Squid is
