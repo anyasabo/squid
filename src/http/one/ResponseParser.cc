@@ -7,6 +7,7 @@
  */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "base/Raw.h"
 #include "debug/Stream.h"
 #include "http/one/ResponseParser.h"
@@ -190,7 +191,7 @@ Http::One::ResponseParser::parseResponseFirstLine()
     }
 
     // unreachable
-    assert(false);
+    Assure2(false, "unreachable");
     return -1;
 }
 

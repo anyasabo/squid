@@ -236,7 +236,7 @@ httpHeaderParseQuotedString(const char *start, const int len, String *val)
 SBuf
 httpHeaderQuoteString(const char *raw)
 {
-    assert(raw);
+    Assure(raw);
 
     // TODO: Optimize by appending a sequence of characters instead of a char.
     // This optimization may be easier with Tokenizer after raw becomes SBuf.
@@ -279,7 +279,7 @@ Http::SlowlyParseQuotedString(const char * const description, const char * const
 
 HttpHeader::HttpHeader(const http_hdr_owner_type anOwner): owner(anOwner), len(0), conflictingContentLength_(false)
 {
-    assert(anOwner > hoNone && anOwner < hoEnd);
+    Assure(anOwner > hoNone && anOwner < hoEnd);
     debugs(55, 7, "init-ing hdr: " << this << " owner: " << owner);
     entries.reserve(32);
     httpHeaderMaskInit(&mask, 0);
@@ -304,7 +304,7 @@ HttpHeader::operator =(const HttpHeader &other)
 {
     if (this != &other) {
         // we do not really care, but the caller probably does
-        assert(owner == other.owner);
+        Assure(owner == other.owner);
         clean();
         update(&other); // will update the mask as well
         len = other.len;
@@ -318,7 +318,7 @@ void
 HttpHeader::clean()
 {
 
-    assert(owner > hoNone && owner < hoEnd);
+    Assure(owner > hoNone && owner < hoEnd);
     debugs(55, 7, "cleaning hdr: " << this << " owner: " << owner);
 
     if (owner <= hoReply) {
@@ -363,8 +363,8 @@ HttpHeader::clean()
 void
 HttpHeader::append(const HttpHeader * src)
 {
-    assert(src);
-    assert(src != this);
+    Assure(src);
+    Assure(src != this);
     debugs(55, 7, "appending hdr: " << this << " += " << src);
 
     for (auto e : src->entries) {
@@ -399,8 +399,8 @@ HttpHeader::skipUpdateHeader(const Http::HdrType id) const
 void
 HttpHeader::update(HttpHeader const *fresh)
 {
-    assert(fresh);
-    assert(this != fresh);
+    Assure(fresh);
+    Assure(this != fresh);
 
     const HttpHeaderEntry *e;
     HttpHeaderPos pos = HttpHeaderInitPos;
@@ -485,7 +485,7 @@ HttpHeader::parse(const char *header_start, size_t hdrLen, Http::ContentLengthIn
     const char *header_end = header_start + hdrLen; // XXX: remove
     int warnOnError = (Config.onoff.relaxed_header_parser <= 0 ? DBG_IMPORTANT : 2);
 
-    assert(header_start && header_end);
+    Assure(header_start && header_end);
     debugs(55, 7, "parsing hdr: (" << this << ")" << std::endl << getStringPrefix(header_start, hdrLen));
     ++ HttpHeaderStats[owner].parsedCount;
 
@@ -673,7 +673,7 @@ HttpHeader::packInto(Packable * p, bool mask_sensitive_info) const
 {
     HttpHeaderPos pos = HttpHeaderInitPos;
     const HttpHeaderEntry *e;
-    assert(p);
+    Assure(p);
     debugs(55, 7, this << " into " << p <<
            (mask_sensitive_info ? " while masking" : ""));
     /* pack all entries one by one */
@@ -715,7 +715,7 @@ HttpHeader::packInto(Packable * p, bool mask_sensitive_info) const
 HttpHeaderEntry *
 HttpHeader::getEntry(HttpHeaderPos * pos) const
 {
-    assert(pos);
+    Assure(pos);
     assert(*pos >= HttpHeaderInitPos && *pos < static_cast<ssize_t>(entries.size()));
 
     for (++(*pos); *pos < static_cast<ssize_t>(entries.size()); ++(*pos)) {
@@ -734,8 +734,8 @@ HttpHeader::getEntry(HttpHeaderPos * pos) const
 HttpHeaderEntry *
 HttpHeader::findEntry(Http::HdrType id) const
 {
-    assert(any_registered_header(id));
-    assert(!Http::HeaderLookupTable.lookup(id).list);
+    Assure(any_registered_header(id));
+    Assure(!Http::HeaderLookupTable.lookup(id).list);
 
     /* check mask first */
 
@@ -749,7 +749,7 @@ HttpHeader::findEntry(Http::HdrType id) const
     }
 
     /* hm.. we thought it was there, but it was not found */
-    assert(false);
+    Assure2(false, "unreachable");
     return nullptr;        /* not reached */
 }
 
@@ -759,8 +759,8 @@ HttpHeader::findEntry(Http::HdrType id) const
 HttpHeaderEntry *
 HttpHeader::findLastEntry(Http::HdrType id) const
 {
-    assert(any_registered_header(id));
-    assert(!Http::HeaderLookupTable.lookup(id).list);
+    Assure(any_registered_header(id));
+    Assure(!Http::HeaderLookupTable.lookup(id).list);
 
     /* check mask first */
     if (!CBIT_TEST(mask, id))
@@ -772,7 +772,7 @@ HttpHeader::findLastEntry(Http::HdrType id) const
     }
 
     /* hm.. we thought it was there, but it was not found */
-    assert(false);
+    Assure2(false, "unreachable");
     return nullptr; /* not reached */
 }
 
@@ -799,7 +799,7 @@ int
 HttpHeader::delById(Http::HdrType id)
 {
     debugs(55, 8, this << " del-by-id " << id);
-    assert(any_registered_header(id));
+    Assure(any_registered_header(id));
 
     if (!CBIT_TEST(mask, id))
         return 0;
@@ -813,7 +813,7 @@ HttpHeader::delById(Http::HdrType id)
     }
 
     CBIT_CLR(mask, id);
-    assert(count);
+    Assure(count);
     return count;
 }
 
@@ -832,7 +832,7 @@ HttpHeader::delAt(HttpHeaderPos pos, int &headers_deleted)
     entries[pos] = nullptr;
     /* decrement header length, allow for ": " and crlf */
     len -= e->name.length() + 2 + e->value.size() + 2;
-    assert(len >= 0);
+    Assure(len >= 0);
     delete e;
     ++headers_deleted;
 }
@@ -868,9 +868,9 @@ HttpHeader::refreshMask()
 void
 HttpHeader::addEntry(HttpHeaderEntry * e)
 {
-    assert(e);
-    assert(any_HdrType_enum_value(e->id));
-    assert(e->name.length());
+    Assure(e);
+    Assure(any_HdrType_enum_value(e->id));
+    Assure(e->name.length());
 
     debugs(55, 7, this << " adding entry: " << e->id << " at " << entries.size());
 
@@ -892,7 +892,7 @@ HttpHeader::getList(Http::HdrType id, String *s) const
 {
     debugs(55, 9, this << " joining for id " << id);
     /* only fields from ListHeaders array can be "listed" */
-    assert(Http::HeaderLookupTable.lookup(id).list);
+    Assure(Http::HeaderLookupTable.lookup(id).list);
 
     if (!CBIT_TEST(mask, id))
         return false;
@@ -924,7 +924,7 @@ HttpHeader::getList(Http::HdrType id) const
     HttpHeaderPos pos = HttpHeaderInitPos;
     debugs(55, 9, this << "joining for id " << id);
     /* only fields from ListHeaders array can be "listed" */
-    assert(Http::HeaderLookupTable.lookup(id).list);
+    Assure(Http::HeaderLookupTable.lookup(id).list);
 
     if (!CBIT_TEST(mask, id))
         return String();
@@ -1019,7 +1019,7 @@ HttpHeader::hasNamed(const char *name, unsigned int namelen, String *result) con
     HttpHeaderPos pos = HttpHeaderInitPos;
     HttpHeaderEntry *e;
 
-    assert(name);
+    Assure(name);
 
     /* First try the quick path */
     id = Http::HeaderLookupTable.lookup(name,namelen).id;
@@ -1049,7 +1049,7 @@ HttpHeader::hasNamed(const char *name, unsigned int namelen, String *result) con
 SBuf
 HttpHeader::getByNameListMember(const char *name, const char *member, const char separator) const
 {
-    assert(name);
+    Assure(name);
     const auto header = getByName(name);
     return ::getListMember(header, member, separator);
 }
@@ -1060,7 +1060,7 @@ HttpHeader::getByNameListMember(const char *name, const char *member, const char
 SBuf
 HttpHeader::getListMember(Http::HdrType id, const char *member, const char separator) const
 {
-    assert(any_registered_header(id));
+    Assure(any_registered_header(id));
     const auto header = getStrOrList(id);
     return ::getListMember(header, member, separator);
 }
@@ -1069,7 +1069,7 @@ HttpHeader::getListMember(Http::HdrType id, const char *member, const char separ
 int
 HttpHeader::has(Http::HdrType id) const
 {
-    assert(any_registered_header(id));
+    Assure(any_registered_header(id));
     debugs(55, 9, this << " lookup for " << id);
     return CBIT_TEST(mask, id);
 }
@@ -1100,43 +1100,47 @@ HttpHeader::addVia(const AnyP::ProtocolVersion &ver, const HttpHeader *from)
 void
 HttpHeader::putInt(Http::HdrType id, int number)
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt);  /* must be of an appropriate type */
-    assert(number >= 0);
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt);/* must be of an appropriate type */
+
+    Assure(number >= 0);
     addEntry(new HttpHeaderEntry(id, SBuf(), xitoa(number)));
 }
 
 void
 HttpHeader::putInt64(Http::HdrType id, int64_t number)
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt64);    /* must be of an appropriate type */
-    assert(number >= 0);
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt64);/* must be of an appropriate type */
+
+    Assure(number >= 0);
     addEntry(new HttpHeaderEntry(id, SBuf(), xint64toa(number)));
 }
 
 void
 HttpHeader::putTime(Http::HdrType id, time_t htime)
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123);    /* must be of an appropriate type */
-    assert(htime >= 0);
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123);/* must be of an appropriate type */
+
+    Assure(htime >= 0);
     addEntry(new HttpHeaderEntry(id, SBuf(), Time::FormatRfc1123(htime)));
 }
 
 void
 HttpHeader::putStr(Http::HdrType id, const char *str)
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);  /* must be of an appropriate type */
-    assert(str);
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);/* must be of an appropriate type */
+
+    Assure(str);
     addEntry(new HttpHeaderEntry(id, SBuf(), str));
 }
 
 void
 HttpHeader::putAuth(const char *auth_scheme, const char *realm)
 {
-    assert(auth_scheme && realm);
+    Assure(auth_scheme && realm);
     httpHeaderPutStrf(this, Http::HdrType::WWW_AUTHENTICATE, "%s realm=\"%s\"", auth_scheme, realm);
 }
 
@@ -1158,7 +1162,7 @@ HttpHeader::putCc(const HttpHdrCc &cc)
 void
 HttpHeader::putContRange(const HttpHdrContRange * cr)
 {
-    assert(cr);
+    Assure(cr);
     /* remove old directives if any */
     delById(Http::HdrType::CONTENT_RANGE);
     /* pack into mb */
@@ -1174,7 +1178,7 @@ HttpHeader::putContRange(const HttpHdrContRange * cr)
 void
 HttpHeader::putRange(const HttpHdrRange * range)
 {
-    assert(range);
+    Assure(range);
     /* remove old directives if any */
     delById(Http::HdrType::RANGE);
     /* pack into mb */
@@ -1190,7 +1194,7 @@ HttpHeader::putRange(const HttpHdrRange * range)
 void
 HttpHeader::putSc(HttpHdrSc *sc)
 {
-    assert(sc);
+    Assure(sc);
     /* remove old directives if any */
     delById(Http::HdrType::SURROGATE_CONTROL);
     /* pack into mb */
@@ -1207,7 +1211,7 @@ HttpHeader::putSc(HttpHdrSc *sc)
 void
 HttpHeader::putExt(const char *name, const char *value)
 {
-    assert(name && value);
+    Assure(name && value);
     debugs(55, 8, this << " adds ext entry " << name << " : " << value);
     addEntry(new HttpHeaderEntry(Http::HdrType::OTHER, SBuf(name), value));
 }
@@ -1215,8 +1219,8 @@ HttpHeader::putExt(const char *name, const char *value)
 void
 HttpHeader::updateOrAddStr(const Http::HdrType id, const SBuf &newValue)
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);
 
     // XXX: HttpHeaderEntry::value suffers from String size limits
     Assure(newValue.length() < String::SizeMaxXXX());
@@ -1245,15 +1249,16 @@ HttpHeader::updateOrAddStr(const Http::HdrType id, const SBuf &newValue)
         foundSameName = true;
         // continue to delete any repeated same-name entries
     }
-    assert(foundSameName);
+    Assure(foundSameName);
     debugs(55, 5, "synced: " << Http::HeaderLookupTable.lookup(id).name << ": " << newValue);
 }
 
 int
 HttpHeader::getInt(Http::HdrType id) const
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt);  /* must be of an appropriate type */
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt);/* must be of an appropriate type */
+
     HttpHeaderEntry *e;
 
     if ((e = findEntry(id)))
@@ -1265,8 +1270,9 @@ HttpHeader::getInt(Http::HdrType id) const
 int64_t
 HttpHeader::getInt64(Http::HdrType id) const
 {
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt64);    /* must be of an appropriate type */
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftInt64);/* must be of an appropriate type */
+
     HttpHeaderEntry *e;
 
     if ((e = findEntry(id)))
@@ -1280,8 +1286,9 @@ HttpHeader::getTime(Http::HdrType id) const
 {
     HttpHeaderEntry *e;
     time_t value = -1;
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123);    /* must be of an appropriate type */
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123);/* must be of an appropriate type */
+
 
     if ((e = findEntry(id))) {
         value = Time::ParseRfc1123(e->value.termedBuf());
@@ -1296,8 +1303,9 @@ const char *
 HttpHeader::getStr(Http::HdrType id) const
 {
     HttpHeaderEntry *e;
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);  /* must be of an appropriate type */
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);/* must be of an appropriate type */
+
 
     if ((e = findEntry(id))) {
         httpHeaderNoteParsedEntry(e->id, e->value, false);  /* no errors are possible */
@@ -1312,8 +1320,9 @@ const char *
 HttpHeader::getLastStr(Http::HdrType id) const
 {
     HttpHeaderEntry *e;
-    assert(any_registered_header(id));
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);  /* must be of an appropriate type */
+    Assure(any_registered_header(id));
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftStr);/* must be of an appropriate type */
+
 
     if ((e = findLastEntry(id))) {
         httpHeaderNoteParsedEntry(e->id, e->value, false);  /* no errors are possible */
@@ -1409,7 +1418,7 @@ HttpHeader::getAuthToken(Http::HdrType id, const char *auth_scheme) const
 {
     const char *field;
     int l;
-    assert(auth_scheme);
+    Assure(auth_scheme);
     field = getStr(id);
 
     static const SBuf nil;
@@ -1451,7 +1460,8 @@ HttpHeader::getETag(Http::HdrType id) const
 {
     ETag etag = {nullptr, -1};
     HttpHeaderEntry *e;
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftETag);     /* must be of an appropriate type */
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftETag);/* must be of an appropriate type */
+
 
     if ((e = findEntry(id)))
         etagParseInit(&etag, e->value.termedBuf());
@@ -1464,7 +1474,8 @@ HttpHeader::getTimeOrTag(Http::HdrType id) const
 {
     TimeOrTag tot;
     HttpHeaderEntry *e;
-    assert(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123_or_ETag);    /* must be of an appropriate type */
+    Assure(Http::HeaderLookupTable.lookup(id).type == Http::HdrFieldType::ftDate_1123_or_ETag);/* must be of an appropriate type */
+
     memset(&tot, 0, sizeof(tot));
 
     if ((e = findEntry(id))) {
@@ -1482,7 +1493,8 @@ HttpHeader::getTimeOrTag(Http::HdrType id) const
         }
     }
 
-    assert(tot.time < 0 || !tot.tag.str);   /* paranoid */
+    Assure(tot.time < 0 || !tot.tag.str);/* paranoid */
+
     return tot;
 }
 
@@ -1492,7 +1504,7 @@ HttpHeader::getTimeOrTag(Http::HdrType id) const
 
 HttpHeaderEntry::HttpHeaderEntry(Http::HdrType anId, const SBuf &aName, const char *aValue)
 {
-    assert(any_HdrType_enum_value(anId));
+    Assure(any_HdrType_enum_value(anId));
     id = anId;
 
     if (id != Http::HdrType::OTHER)
@@ -1644,7 +1656,7 @@ HttpHeaderEntry::clone() const
 void
 HttpHeaderEntry::packInto(Packable * p) const
 {
-    assert(p);
+    Assure(p);
     p->append(name.rawContent(), name.length());
     p->append(": ", 2);
     p->append(value.rawBuf(), value.size());
@@ -1800,7 +1812,7 @@ HttpHeader::hasListMember(Http::HdrType id, const char *member, const char separ
     int ilen;
     int mlen = strlen(member);
 
-    assert(any_registered_header(id));
+    Assure(any_registered_header(id));
 
     String header (getStrOrList(id));
 
@@ -1824,7 +1836,7 @@ HttpHeader::hasByNameListMember(const char *name, const char *member, const char
     int ilen;
     int mlen = strlen(member);
 
-    assert(name);
+    Assure(name);
 
     String header (getByName(name));
 

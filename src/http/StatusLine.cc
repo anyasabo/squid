@@ -9,6 +9,7 @@
 /* DEBUG: section 57    HTTP Status-line */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "base/Packable.h"
 #include "debug/Stream.h"
 #include "http/one/ResponseParser.h"
@@ -87,7 +88,7 @@ Http::StatusLine::packInto(Packable * p) const
 {
     // Keep in sync with packedLength().
 
-    assert(p);
+    Assure(p);
 
     auto packedStatus = status();
     auto packedReason = reason();
