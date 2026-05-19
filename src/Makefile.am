@@ -2012,6 +2012,191 @@ tests_testIpAddress_LDADD = \
 	$(XTRA_LIBS)
 tests_testIpAddress_LDFLAGS = $(LIBADD_DL)
 
+## Tests of acl/*
+## These use stub_AclNode.cc to avoid the deep dependency chain from
+## acl/libacls.la and acl/libstate.la (which pull in Security, ConnStateData,
+## Http::Message, etc.). Only the specific .cc files under test are compiled.
+
+check_PROGRAMS += tests/testAclIp
+tests_testAclIp_SOURCES = \
+	tests/testAclIp.cc \
+	acl/Ip.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclIp_SOURCES = \
+	$(TESTSOURCES) \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libanyp.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libtime.cc
+tests_testAclIp_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(XTRA_LIBS)
+tests_testAclIp_LDFLAGS = $(LIBADD_DL)
+
+check_PROGRAMS += tests/testAclDomainMatching
+tests_testAclDomainMatching_SOURCES = \
+	tests/testAclDomainMatching.cc \
+	acl/DomainData.cc \
+	anyp/Uri.cc \
+	anyp/UriScheme.cc \
+	anyp/Host.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_client_side.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	tests/stub_cache_manager.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclDomainMatching_SOURCES = \
+	$(TESTSOURCES) \
+	anyp/ProtocolType.cc \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libsecurity.cc \
+	tests/stub_libtime.cc
+tests_testAclDomainMatching_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(SSLLIB) \
+	$(XTRA_LIBS)
+tests_testAclDomainMatching_LDFLAGS = $(LIBADD_DL)
+
+check_PROGRAMS += tests/testAclServerName
+tests_testAclServerName_SOURCES = \
+	tests/testAclServerName.cc \
+	acl/DomainData.cc \
+	anyp/Uri.cc \
+	anyp/UriScheme.cc \
+	anyp/Host.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_client_side.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	tests/stub_cache_manager.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclServerName_SOURCES = \
+	$(TESTSOURCES) \
+	anyp/ProtocolType.cc \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libsecurity.cc \
+	tests/stub_libtime.cc
+tests_testAclServerName_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(SSLLIB) \
+	$(XTRA_LIBS)
+tests_testAclServerName_LDFLAGS = $(LIBADD_DL)
+
+check_PROGRAMS += tests/testAclFailOpen
+tests_testAclFailOpen_SOURCES = \
+	tests/testAclFailOpen.cc \
+	anyp/Uri.cc \
+	anyp/UriScheme.cc \
+	anyp/Host.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_client_side.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	tests/stub_cache_manager.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclFailOpen_SOURCES = \
+	$(TESTSOURCES) \
+	anyp/ProtocolType.cc \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libsecurity.cc \
+	tests/stub_libtime.cc
+tests_testAclFailOpen_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(SSLLIB) \
+	$(XTRA_LIBS)
+tests_testAclFailOpen_LDFLAGS = $(LIBADD_DL)
+
 ## Tests of icmp/*
 
 check_PROGRAMS += tests/testIcmp
