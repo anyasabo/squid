@@ -1,0 +1,35 @@
+=== Overnight Fuzzing Run ===
+Total: 23000s, Per harness: 2875s
+Started: Tue May 19 06:28:46 UTC 2026
+
+--- Tue May 19 06:28:46 UTC 2026: fuzz_http1_request_parser (2875s) ---
+  Corpus: 1367, Findings: 0
+
+--- Tue May 19 07:16:42 UTC 2026: fuzz_http1_response_parser (2875s) ---
+  Corpus: 2125, Findings: 0
+
+--- Tue May 19 08:04:38 UTC 2026: fuzz_uri_parser (2875s) ---
+  Corpus: 2319, Findings: 0
+
+--- Tue May 19 08:52:34 UTC 2026: fuzz_content_length (2875s) ---
+  Corpus: 12, Findings: 0
+
+--- Tue May 19 09:40:30 UTC 2026: fuzz_tls_handshake (2875s) ---
+  Corpus: 310, Findings: 0
+
+--- Tue May 19 10:28:27 UTC 2026: fuzz_cache_control (2875s) ---
+  Corpus: 38, Findings: 1
+
+--- Tue May 19 10:28:27 UTC 2026: fuzz_dns_message (2875s) ---
+  Corpus: 197, Findings: 0
+
+--- Tue May 19 11:16:23 UTC 2026: fuzz_ftp_parsing (2875s) ---
+  Corpus: 18, Findings: 1
+
+=== Fuzzing Complete ===
+Ended: Tue May 19 11:16:23 UTC 2026
+Total findings: 2
+
+=== Crash/Leak Files ===
+/fuzz/findings/fuzz_cache_control/crash-ba75a7a62e211bcc49a5581fea51de146c2f7911
+/fuzz/findings/fuzz_ftp_parsing/crash-86a6dd830cec4aeba832a7bf73da755dcbc2f6ee
