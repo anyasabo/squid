@@ -204,10 +204,43 @@ continues on the next line with leading whitespace.
 - **Affects all configurations**: no `relaxed_header_parser` setting
   prevents the bug.
 
+## History: PR #701 was explicitly intended to fix this
+
+The defense at HttpHeader.cc:590-598 was added in **PR #701** ("Forbid
+obs-fold and bare CR whitespace in framing header fields"), merged
+2020-08-15, by Amos Jeffries (yadij). Commit `580448c9d9`.
+
+The PR description states:
+> "Squid now rejects messages with folded Content-Length and
+>  Transfer-Encoding header field values."
+
+The `unfoldMime()` function that defeats this defense was also written by
+Amos Jeffries, 4 years earlier (2016-05-20, commit `0023726911`). Both
+are in the same codebase but in different layers:
+
+- `unfoldMime()` lives in `Http::One::Parser` (HTTP/1 parser layer)
+- The framing header check lives in `HttpHeader::parse()` (generic header layer)
+
+The code review (by rousskov) focused on bare CR handling, variable
+naming, and protocol considerations. **Nobody caught that `unfoldMime()`
+runs before `HttpHeader::parse()`, destroying the obs-fold evidence.**
+
+Rousskov noted the complexity of the parsing code:
+> "I cannot be sure about this unreadable loop overall"
+
+The companion PR #702 ("Improve Transfer-Encoding handling") and #703
+(next-gen parser) were referenced as the future home for a "proper"
+solution, but neither addressed the unfoldMime ordering problem.
+
+The `hasBareCr` path (lines 543-558) works correctly because bare CRs
+are handled **inside** `HttpHeader::parse()`, not erased by a prior
+stage. The asymmetry — obs-fold erased before the check, bare CR
+preserved until the check — is the fundamental issue.
+
 ## Related
 
+- **PR #701**: https://github.com/squid-cache/squid/pull/701
+  (the PR that was supposed to fix this, but didn't due to ordering)
 - Similar class as SQUID-2023:1 (HTTP request/response smuggling)
 - RFC 9112 §5.1 explicitly added the framing header exception after
   earlier smuggling research (James Kettle et al.)
-- The defense code at HttpHeader.cc:590-598 was likely added to address
-  exactly this scenario, but `unfoldMime()` makes it unreachable.
