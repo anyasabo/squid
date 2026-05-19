@@ -153,6 +153,51 @@ Http::One::Parser::unfoldMime()
     }
 }
 
+/// \returns whether the (pre-unfold) mime header block contains obs-fold
+/// on a framing header (Content-Length or Transfer-Encoding).
+/// RFC 9112 Section 5.1 declares such messages malformed.
+bool
+Http::One::Parser::hasObsFoldedFramingHeader() const
+{
+    // case-insensitive scan of the raw (pre-unfold) header block
+    // for Content-Length or Transfer-Encoding header names whose
+    // field-value continues on the next line (obs-fold)
+    static const SBuf clName("content-length");
+    static const SBuf teName("transfer-encoding");
+
+    Tokenizer tok(mimeHeaderBlock_);
+    static const CharacterSet nonLF = CharacterSet::LF.complement("non-LF");
+    static const CharacterSet fieldNameChars("field-name",
+        "!#$%&'*+-.^_`|~"
+        "0123456789"
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+
+    while (!tok.atEnd()) {
+        // extract field-name
+        const SBuf nameBuf(tok.remaining().substr(0, tok.remaining().find(':')));
+        SBuf lcName(nameBuf);
+        lcName.toLower();
+
+        const bool isFraming = (lcName == clName || lcName == teName);
+        if (isFraming) {
+            // skip to end of this header line (past the field-name)
+            tok.skipAll(nonLF);
+            if (tok.skipOne(CharacterSet::LF)) {
+                // obs-fold: LF followed by SP or HTAB
+                if (!tok.atEnd() && tok.skipAll(CharacterSet::WSP))
+                    return true;
+            }
+        } else {
+            // skip this entire header line
+            tok.skipAll(nonLF);
+            tok.skipOne(CharacterSet::LF);
+        }
+    }
+
+    return false;
+}
+
 bool
 Http::One::Parser::grabMimeBlock(const char *which, const size_t limit)
 {
@@ -180,8 +225,15 @@ Http::One::Parser::grabMimeBlock(const char *which, const size_t limit)
 
             mimeHeaderBlock_ = buf_.consume(mimeHeaderBytes);
             cleanMimePrefix();
-            if (containsObsFold)
+            if (containsObsFold) {
+                if (hasObsFoldedFramingHeader()) {
+                    debugs(33, 3, "obs-fold in framing header");
+                    parseStatusCode = Http::scBadRequest;
+                    parsingStage_ = HTTP_PARSE_DONE;
+                    return false;
+                }
                 unfoldMime();
+            }
 
             debugs(74, 5, "mime header (0-" << mimeHeaderBytes << ") {" << mimeHeaderBlock_ << "}");
 
