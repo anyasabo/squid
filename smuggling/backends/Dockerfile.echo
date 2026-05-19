@@ -1,0 +1,5 @@
+FROM python:3.12-alpine
+WORKDIR /app
+COPY echo_server.py .
+EXPOSE 8888
+CMD ["python3", "echo_server.py"]
