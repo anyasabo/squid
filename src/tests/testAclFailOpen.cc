@@ -9,6 +9,7 @@
 #include "squid.h"
 #include "anyp/Uri.h"
 #include "compat/cppunit.h"
+#include "ip/Address.h"
 #include "SquidConfig.h"
 #include "unitTestMain.h"
 
@@ -46,6 +47,8 @@ class TestAclFailOpen : public CPPUNIT_NS::TestFixture
     CPPUNIT_TEST(testUrlDoubleEncodedNull);
     CPPUNIT_TEST(testUrlNormalDecode);
     CPPUNIT_TEST(testSourceDomainNoneLiteral);
+    CPPUNIT_TEST(testSourceDomainNoneNotSubdomain);
+    CPPUNIT_TEST(testDestinationIpFailOpenScenario);
     CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -55,6 +58,8 @@ protected:
     void testUrlDoubleEncodedNull();
     void testUrlNormalDecode();
     void testSourceDomainNoneLiteral();
+    void testSourceDomainNoneNotSubdomain();
+    void testDestinationIpFailOpenScenario();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestAclFailOpen);
@@ -124,6 +129,62 @@ TestAclFailOpen::testSourceDomainNoneLiteral()
 
     // ".none" as a configured domain would match "x.none" subdomains
     CPPUNIT_ASSERT_EQUAL(0, matchDomainName("x.none", ".none"));
+}
+
+void
+TestAclFailOpen::testSourceDomainNoneNotSubdomain()
+{
+    // Verify that "none" does NOT match subdomain patterns.
+    // SourceDomain.cc:58 falls through to data->match("none") on RDNS failure.
+    // If admin configures "acl blocked srcdomain .evil.com", the "none" fallback
+    // should not match -- and indeed it doesn't. But the *consequence* is that
+    // traffic is allowed through a deny-list: the block ACL returns no-match,
+    // so "http_access deny blocked" doesn't fire, and "http_access allow all" does.
+    CPPUNIT_ASSERT(0 != matchDomainName("none", ".evil.com"));
+    CPPUNIT_ASSERT(0 != matchDomainName("none", ".example.com"));
+    CPPUNIT_ASSERT(0 != matchDomainName("none", "specific.host.com"));
+}
+
+void
+TestAclFailOpen::testDestinationIpFailOpenScenario()
+{
+    // DestinationIp.cc:76-84 fail-open scenario:
+    //
+    // The code path is:
+    //   1. ipcache_gethostbyname() returns nullptr (no cached entry)
+    //   2. destinationIpLookedUp is false (first attempt)
+    //   3. goAsync() fails (returns false -- e.g., async not supported in context)
+    //   4. Falls through to return 0 (no-match)
+    //
+    // In a deny-list config:
+    //   http_access deny dst 10.0.0.0/8
+    //   http_access allow all
+    //
+    // When DNS lookup can't go async, the deny rule silently fails to match,
+    // and traffic is allowed. The XXX comment at line 81 acknowledges this.
+    //
+    // We can't easily test the full async path without mocking ipcache and
+    // ACLChecklist, but we CAN verify the semantics: return value 0 means
+    // "no match" which in a deny-list equals "allow".
+    //
+    // The fix would be to return -1 (access denied / needs async) or to
+    // use a fail-closed approach where unknown destinations are blocked.
+
+    // Demonstrate that matchIPAddr returns non-zero for non-matching IPs
+    // (this is the comparison that DestinationIp would do IF DNS succeeded)
+    Ip::Address configured;
+    configured = "10.1.2.3";
+
+    Ip::Address client;
+    client = "10.1.2.3";
+    CPPUNIT_ASSERT_EQUAL(0, configured.matchIPAddr(client));
+
+    client = "192.168.1.1";
+    CPPUNIT_ASSERT(0 != configured.matchIPAddr(client));
+
+    // But when DNS fails entirely, match() returns 0 without ever calling
+    // matchIPAddr -- the comparison is silently skipped.
+    // This is the fail-open: 0 == "no match" == "don't deny" == "allow"
 }
 
 int

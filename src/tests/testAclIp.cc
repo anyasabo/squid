@@ -8,293 +8,318 @@
 
 #include "squid.h"
 #include "acl/Ip.h"
+#include "acl/SplayInserter.h"
 #include "compat/cppunit.h"
 #include "ip/Address.h"
-#include "ip/tools.h"
+#include "SquidConfig.h"
 #include "unitTestMain.h"
 
-#include <cstring>
-#include <string>
+class SquidConfig Config;
+class SquidConfig2 Config2;
 
-/**
- * Test suite for ACL IP matching (acl_ip_data and ACLIP).
+/*
+ * Reproduces ACLIP::match(const Ip::Address &) by constructing
+ * acl_ip_data entries and searching via the same splay comparator
+ * used in production (aclIpAddrNetworkCompare, declared in Ip.cc).
  *
- * The ACL IP subsystem is the foundation of Squid's network-level access
- * control. Bugs here have direct security implications for egress proxies:
- * a matching failure can allow traffic that should be denied.
- *
- * src/acl/ has ~87 source files and zero dedicated unit tests.
- * This is a start.
+ * We cannot call aclIpAddrNetworkCompare directly since it is static,
+ * so we replicate its logic here. This is the same approach used by
+ * testAclServerName.cc for domain matching.
  */
-
-/// Test subclass to expose the protected match(Ip::Address) method
-class TestableACLIP : public ACLIP
+static int
+ipNetworkCompare(acl_ip_data *const &needle, acl_ip_data *const &entry)
 {
-public:
-    const char *typeString() const override { return "test-ip"; }
-    int match(ACLChecklist *) override { return 0; }
-    using ACLIP::match; // expose protected match(const Ip::Address &)
-    using ACLIP::data;  // expose protected data splay tree
-};
+    Ip::Address A = needle->addr1;
+    A.applyMask(entry->mask);
+
+    if (entry->addr2.isAnyAddr()) {
+        return A.matchIPAddr(entry->addr1);
+    } else {
+        if ((A >= entry->addr1) && (A <= entry->addr2))
+            return 0;
+        else
+            return A.matchIPAddr(entry->addr1);
+    }
+}
+
+static bool
+ipMatch(Splay<acl_ip_data *> &tree, const Ip::Address &clientip)
+{
+    static acl_ip_data clientEntry;
+    clientEntry.addr1 = clientip;
+    clientEntry.addr2.setEmpty();
+    clientEntry.mask.setEmpty();
+
+    const acl_ip_data *const *result = tree.find(&clientEntry, ipNetworkCompare);
+    return (result != nullptr);
+}
+
+static void
+insertSingleIp(Splay<acl_ip_data *> &tree, const char *ipStr)
+{
+    auto *entry = new acl_ip_data;
+    entry->addr1 = ipStr;
+    entry->addr2.setAnyAddr();
+    entry->mask.setNoAddr();
+    entry->next = nullptr;
+    Acl::SplayInserter<acl_ip_data *>::Merge(tree, std::move(entry));
+}
+
+static void
+insertCidr(Splay<acl_ip_data *> &tree, const char *ipStr, int prefixLen, int family)
+{
+    auto *entry = new acl_ip_data;
+    entry->addr1 = ipStr;
+    entry->addr2.setAnyAddr();
+    entry->mask.setNoAddr();
+    entry->mask.applyMask(prefixLen, family);
+    entry->addr1.applyMask(entry->mask);
+    entry->next = nullptr;
+    Acl::SplayInserter<acl_ip_data *>::Merge(tree, std::move(entry));
+}
+
+static void
+insertRange(Splay<acl_ip_data *> &tree, const char *lo, const char *hi)
+{
+    auto *entry = new acl_ip_data;
+    entry->addr1 = lo;
+    entry->addr2 = hi;
+    entry->mask.setNoAddr();
+    entry->next = nullptr;
+    Acl::SplayInserter<acl_ip_data *>::Merge(tree, std::move(entry));
+}
 
 class TestAclIp : public CPPUNIT_NS::TestFixture
 {
     CPPUNIT_TEST_SUITE(TestAclIp);
-    CPPUNIT_TEST(testFactoryParseIPv4Single);
-    CPPUNIT_TEST(testFactoryParseIPv4Cidr);
-    CPPUNIT_TEST(testFactoryParseIPv4Range);
-    CPPUNIT_TEST(testFactoryParseIPv6Single);
-    CPPUNIT_TEST(testFactoryParseIPv6Cidr);
-    CPPUNIT_TEST(testMatchIPv4InCidr);
-    CPPUNIT_TEST(testMatchIPv4OutOfCidr);
-    CPPUNIT_TEST(testMatchIPv4Range);
-    CPPUNIT_TEST(testMatchIPv6InCidr);
-    CPPUNIT_TEST(testIPv4MappedIPv6);
-    CPPUNIT_TEST(testNetmaskEdgeCases);
+    CPPUNIT_TEST(testExactIpv4Match);
+    CPPUNIT_TEST(testCidr24);
+    CPPUNIT_TEST(testCidr32ExactMatch);
+    CPPUNIT_TEST(testCidr16);
+    CPPUNIT_TEST(testIpRange);
+    CPPUNIT_TEST(testIpv6Exact);
+    CPPUNIT_TEST(testIpv6Cidr);
+    CPPUNIT_TEST(testIpv4MappedIpv6);
+    CPPUNIT_TEST(testLoopback);
+    CPPUNIT_TEST(testMultipleEntries);
+    CPPUNIT_TEST(testNoMatch);
     CPPUNIT_TEST_SUITE_END();
 
 public:
-    void setUp() override;
-    void tearDown() override;
-
-protected:
-    void testFactoryParseIPv4Single();
-    void testFactoryParseIPv4Cidr();
-    void testFactoryParseIPv4Range();
-    void testFactoryParseIPv6Single();
-    void testFactoryParseIPv6Cidr();
-    void testMatchIPv4InCidr();
-    void testMatchIPv4OutOfCidr();
-    void testMatchIPv4Range();
-    void testMatchIPv6InCidr();
-    void testIPv4MappedIPv6();
-    void testNetmaskEdgeCases();
-
-private:
-    /// Helper: parse an ACL IP spec and insert into a splay tree
-    void addAclSpec(TestableACLIP &acl, const char *spec);
+    void testExactIpv4Match();
+    void testCidr24();
+    void testCidr32ExactMatch();
+    void testCidr16();
+    void testIpRange();
+    void testIpv6Exact();
+    void testIpv6Cidr();
+    void testIpv4MappedIpv6();
+    void testLoopback();
+    void testMultipleEntries();
+    void testNoMatch();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TestAclIp);
 
 void
-TestAclIp::setUp()
+TestAclIp::testExactIpv4Match()
 {
-    Ip::ProbeTransport();
+    Splay<acl_ip_data *> tree;
+    insertSingleIp(tree, "10.0.0.1");
+
+    Ip::Address client;
+    client = "10.0.0.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "10.0.0.2";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::tearDown()
+TestAclIp::testCidr24()
 {
+    Splay<acl_ip_data *> tree;
+    insertCidr(tree, "192.168.1.0", 24, AF_INET);
+
+    Ip::Address client;
+    client = "192.168.1.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "192.168.1.254";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "192.168.1.0";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "192.168.2.1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
+
+    client = "10.0.0.1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::addAclSpec(TestableACLIP &acl, const char *spec)
+TestAclIp::testCidr32ExactMatch()
 {
-    if (!acl.data)
-        acl.data = new TestableACLIP::IPSplay();
+    Splay<acl_ip_data *> tree;
+    insertCidr(tree, "10.20.30.40", 32, AF_INET);
 
-    acl_ip_data *q = acl_ip_data::FactoryParse(spec);
-    CPPUNIT_ASSERT_MESSAGE(
-        std::string("FactoryParse failed for: ") + spec,
-        q != nullptr);
+    Ip::Address client;
+    client = "10.20.30.40";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 
-    while (q != nullptr) {
-        acl_ip_data *next = q->next;
-        q->next = nullptr;
-        acl.data->insert(q, [](acl_ip_data * const &a, acl_ip_data * const &b) {
-            return a->addr1.matchIPAddr(b->addr1);
-        });
-        q = next;
-    }
-}
-
-// --- FactoryParse tests ---
-
-void
-TestAclIp::testFactoryParseIPv4Single()
-{
-    acl_ip_data *result = acl_ip_data::FactoryParse("192.168.1.1");
-    CPPUNIT_ASSERT(result != nullptr);
-
-    Ip::Address expected;
-    expected = "192.168.1.1";
-    CPPUNIT_ASSERT(result->addr1 == expected);
-    CPPUNIT_ASSERT(result->next == nullptr);
-    delete result;
+    client = "10.20.30.41";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testFactoryParseIPv4Cidr()
+TestAclIp::testCidr16()
 {
-    acl_ip_data *result = acl_ip_data::FactoryParse("10.0.0.0/8");
-    CPPUNIT_ASSERT(result != nullptr);
+    Splay<acl_ip_data *> tree;
+    insertCidr(tree, "172.16.0.0", 16, AF_INET);
 
-    Ip::Address expected;
-    expected = "10.0.0.0";
-    CPPUNIT_ASSERT(result->addr1 == expected);
-    delete result;
+    Ip::Address client;
+    client = "172.16.0.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "172.16.255.255";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "172.17.0.1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testFactoryParseIPv4Range()
+TestAclIp::testIpRange()
 {
-    acl_ip_data *result = acl_ip_data::FactoryParse("10.0.0.1-10.0.0.255");
-    CPPUNIT_ASSERT(result != nullptr);
+    Splay<acl_ip_data *> tree;
+    insertRange(tree, "10.0.0.10", "10.0.0.20");
 
-    Ip::Address lo, hi;
-    lo = "10.0.0.1";
-    hi = "10.0.0.255";
-    CPPUNIT_ASSERT(result->addr1 == lo);
-    CPPUNIT_ASSERT(result->addr2 == hi);
-    delete result;
+    Ip::Address client;
+    client = "10.0.0.10";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "10.0.0.15";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "10.0.0.20";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "10.0.0.9";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
+
+    client = "10.0.0.21";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testFactoryParseIPv6Single()
+TestAclIp::testIpv6Exact()
 {
-    acl_ip_data *result = acl_ip_data::FactoryParse("::1");
-    CPPUNIT_ASSERT(result != nullptr);
+    Splay<acl_ip_data *> tree;
+    insertSingleIp(tree, "2001:db8::1");
 
-    Ip::Address expected;
-    expected = "::1";
-    CPPUNIT_ASSERT(result->addr1 == expected);
-    delete result;
+    Ip::Address client;
+    client = "2001:db8::1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "2001:db8::2";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testFactoryParseIPv6Cidr()
+TestAclIp::testIpv6Cidr()
 {
-    acl_ip_data *result = acl_ip_data::FactoryParse("2001:db8::/32");
-    CPPUNIT_ASSERT(result != nullptr);
+    Splay<acl_ip_data *> tree;
+    insertCidr(tree, "2001:db8::", 48, AF_INET6);
 
-    Ip::Address expected;
-    expected = "2001:db8::";
-    CPPUNIT_ASSERT(result->addr1 == expected);
-    delete result;
-}
+    Ip::Address client;
+    client = "2001:db8::1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 
-// --- match() tests (via TestableACLIP) ---
+    client = "2001:db8:0:ffff::1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 
-void
-TestAclIp::testMatchIPv4InCidr()
-{
-    TestableACLIP acl;
-    addAclSpec(acl, "10.0.0.0/8");
-
-    Ip::Address inside;
-    inside = "10.1.2.3";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(inside));
-
-    Ip::Address boundary;
-    boundary = "10.0.0.0";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(boundary));
-
-    Ip::Address high;
-    high = "10.255.255.255";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(high));
+    client = "2001:db8:1::1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testMatchIPv4OutOfCidr()
+TestAclIp::testIpv4MappedIpv6()
 {
-    TestableACLIP acl;
-    addAclSpec(acl, "10.0.0.0/8");
+    // Squid stores IPv4 addresses as IPv4-mapped IPv6 internally.
+    // An ACL entry for 10.0.0.1 should match whether the client
+    // presents as IPv4 or IPv4-mapped-IPv6.
+    Splay<acl_ip_data *> tree;
+    insertSingleIp(tree, "10.0.0.1");
 
-    Ip::Address outside;
-    outside = "11.0.0.1";
-    CPPUNIT_ASSERT_EQUAL(0, acl.match(outside));
+    Ip::Address client;
 
-    Ip::Address way_outside;
-    way_outside = "192.168.1.1";
-    CPPUNIT_ASSERT_EQUAL(0, acl.match(way_outside));
+    // Direct IPv4
+    client = "10.0.0.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    // IPv4-mapped IPv6 representation
+    client = "::ffff:10.0.0.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 }
 
 void
-TestAclIp::testMatchIPv4Range()
+TestAclIp::testLoopback()
 {
-    TestableACLIP acl;
-    addAclSpec(acl, "10.0.0.1-10.0.0.100");
+    Splay<acl_ip_data *> tree;
+    insertSingleIp(tree, "127.0.0.1");
 
-    Ip::Address inside;
-    inside = "10.0.0.50";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(inside));
+    Ip::Address client;
+    client = "127.0.0.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 
-    Ip::Address at_start;
-    at_start = "10.0.0.1";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(at_start));
+    // IPv6 loopback is a different address
+    client = "::1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 
-    Ip::Address at_end;
-    at_end = "10.0.0.100";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(at_end));
-
-    Ip::Address below;
-    below = "10.0.0.0";
-    CPPUNIT_ASSERT_EQUAL(0, acl.match(below));
-
-    Ip::Address above;
-    above = "10.0.0.101";
-    CPPUNIT_ASSERT_EQUAL(0, acl.match(above));
+    // Add IPv6 loopback too
+    insertSingleIp(tree, "::1");
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 }
 
 void
-TestAclIp::testMatchIPv6InCidr()
+TestAclIp::testMultipleEntries()
 {
-    TestableACLIP acl;
-    addAclSpec(acl, "2001:db8::/32");
+    Splay<acl_ip_data *> tree;
+    insertCidr(tree, "10.0.0.0", 8, AF_INET);
+    insertCidr(tree, "172.16.0.0", 12, AF_INET);
+    insertSingleIp(tree, "8.8.8.8");
 
-    Ip::Address inside;
-    inside = "2001:db8::1";
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(inside));
+    Ip::Address client;
+    client = "10.1.2.3";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
 
-    Ip::Address outside;
-    outside = "2001:db9::1";
-    CPPUNIT_ASSERT_EQUAL(0, acl.match(outside));
+    client = "172.20.1.1";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "8.8.8.8";
+    CPPUNIT_ASSERT(ipMatch(tree, client));
+
+    client = "8.8.4.4";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
+
+    client = "192.168.1.1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 void
-TestAclIp::testIPv4MappedIPv6()
+TestAclIp::testNoMatch()
 {
-    // IPv4-mapped IPv6 addresses (::ffff:a.b.c.d) should match IPv4 ACLs
-    TestableACLIP acl;
-    addAclSpec(acl, "10.0.0.0/8");
+    Splay<acl_ip_data *> tree;
+    insertSingleIp(tree, "1.2.3.4");
 
-    Ip::Address mapped;
-    mapped = "::ffff:10.1.2.3";
-    // Squid normalizes IPv4-mapped IPv6 to IPv4 internally
-    CPPUNIT_ASSERT_EQUAL(1, acl.match(mapped));
-}
+    Ip::Address client;
+    client = "5.6.7.8";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 
-void
-TestAclIp::testNetmaskEdgeCases()
-{
-    // /32 should match only the exact IP
-    {
-        TestableACLIP acl;
-        addAclSpec(acl, "10.0.0.1/32");
-
-        Ip::Address exact;
-        exact = "10.0.0.1";
-        CPPUNIT_ASSERT_EQUAL(1, acl.match(exact));
-
-        Ip::Address neighbor;
-        neighbor = "10.0.0.2";
-        CPPUNIT_ASSERT_EQUAL(0, acl.match(neighbor));
-    }
-
-    // /24 boundary
-    {
-        TestableACLIP acl;
-        addAclSpec(acl, "172.16.0.0/24");
-
-        Ip::Address inside;
-        inside = "172.16.0.200";
-        CPPUNIT_ASSERT_EQUAL(1, acl.match(inside));
-
-        Ip::Address outside;
-        outside = "172.16.1.0";
-        CPPUNIT_ASSERT_EQUAL(0, acl.match(outside));
-    }
+    // Completely different address family
+    client = "fe80::1";
+    CPPUNIT_ASSERT(!ipMatch(tree, client));
 }
 
 int

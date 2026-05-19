@@ -2034,6 +2034,8 @@ tests_testAclIp_SOURCES = \
 	tests/stub_StatHist.cc \
 	tests/stub_access_log.cc \
 	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
 	wordlist.cc \
 	MemBuf.cc
 nodist_tests_testAclIp_SOURCES = \
@@ -2049,6 +2051,7 @@ tests_testAclIp_LDADD = \
 	base/libbase.la \
 	parser/libparser.la \
 	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
 	$(LIBCPPUNIT_LIBS) \
 	$(COMPAT_LIB) \
 	$(XTRA_LIBS)
