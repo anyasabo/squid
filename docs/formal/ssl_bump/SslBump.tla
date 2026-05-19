@@ -21,7 +21,9 @@ CONSTANTS
     Step2AclOutcome,
     Step3AclOutcome,
     \* Server behavior at step 3 (peek/stare mode only)
-    ServerBehavior
+    ServerBehavior,
+    \* Whether a TLS validation error occurs during negotiation
+    HasValidationError
 
 \* BumpMode values (matching src/ssl/support.h enum)
 BumpNone == 0
@@ -53,6 +55,7 @@ ASSUME Step1AclOutcome \in BumpModes
 ASSUME Step2AclOutcome \in BumpModes
 ASSUME Step3AclOutcome \in BumpModes
 ASSUME ServerBehavior \in ServerBehaviors
+ASSUME HasValidationError \in BOOLEAN
 
 VARIABLES
     currentStep,    \* Which step we are in (1, 2, 3, or 0 = done)
@@ -233,6 +236,50 @@ DoStep3 ==
                 /\ bypassedCert' = FALSE
                 /\ UNCHANGED step1Result
                 /\ UNCHANGED step2Result
+       ELSE IF /\ (currentMode = Peek \/ currentMode = Stare)
+               /\ ServerBehavior = CertError
+               /\ HasValidationError
+            THEN
+                \* Cert validation error with ssl_error_detail set.
+                \* Lines 370-378: SSL_get_ex_data returns error detail,
+                \* so the recovery path is NOT taken.
+                \* Falls through to PeerConnector::noteNegotiationError → error page.
+                /\ step3Result' = Terminate
+                /\ currentMode' = Terminate
+                /\ finalOutcome' = "terminate"
+                /\ currentStep' = 0
+                /\ bypassedCert' = FALSE
+                /\ UNCHANGED step1Result
+                /\ UNCHANGED step2Result
+       ELSE IF /\ (currentMode = Peek \/ currentMode = Stare)
+               /\ ServerBehavior = CertError
+               /\ ~HasValidationError
+            THEN
+                \* Non-validation negotiation error with cert present.
+                \* Lines 370-377: no ssl_error_detail AND holdWrite AND
+                \* serverCert exists → re-runs ACL via checkForPeekAndSplice().
+                \* ACL is evaluated normally but current mode determines fallback.
+                LET effective == Step3Effective(Step3AclOutcome)
+                IN
+                /\ step3Result' = effective
+                /\ CASE effective = Bump ->
+                        /\ currentMode' = Bump
+                        /\ finalOutcome' = "bump"
+                        /\ currentStep' = 0
+                        /\ bypassedCert' = FALSE
+                        /\ UNCHANGED <<step1Result, step2Result>>
+                    [] effective = Splice ->
+                        /\ currentMode' = Splice
+                        /\ finalOutcome' = "splice"
+                        /\ currentStep' = 0
+                        /\ bypassedCert' = FALSE
+                        /\ UNCHANGED <<step1Result, step2Result>>
+                    [] effective = Terminate ->
+                        /\ currentMode' = Terminate
+                        /\ finalOutcome' = "terminate"
+                        /\ currentStep' = 0
+                        /\ bypassedCert' = FALSE
+                        /\ UNCHANGED <<step1Result, step2Result>>
             ELSE
                 \* Normal path: run ACL, apply bans, determine final action
                 LET effective == Step3Effective(Step3AclOutcome)
@@ -314,6 +361,24 @@ NoUnintendedSplice ==
 \* peek+encrypted/resumption path
 BypassOnlyOnHardcodedPath ==
     bypassedCert => (finalOutcome = "splice" /\ step3Result = Splice)
+
+\* SAFETY: When cert validation produces an error, the outcome should
+\* be terminate (error page), not splice. A cert error that silently
+\* becomes splice would hide TLS attacks from the admin.
+CertErrorNeverSplices ==
+    (currentStep = 0
+     /\ ServerBehavior = CertError
+     /\ HasValidationError)
+    => finalOutcome /= "splice"
+
+\* SAFETY: When no ACL rule matches (BumpNone at all steps),
+\* the outcome must not be "bump" -- it should be splice or terminate.
+\* This documents the default-splice fallback behavior from
+\* checkForPeekAndSpliceGuess() (lines 127-141).
+DefaultSpliceFallback ==
+    (currentStep = 0
+     /\ Step1AclOutcome = BumpNone)
+    => finalOutcome \in {"splice", "terminate"}
 
 \* ---- Liveness ----
 

@@ -52,6 +52,23 @@ connection to be spliced (bypassing inspection).
    hardcodes splice when the server resumes a previous session. No
    configuration toggle exists.
 
+### Additional verified properties
+
+3. **`CertErrorNeverSplices`**: When a real cert validation error occurs
+   (`ssl_error_detail` is set), the outcome is always `terminate` (error
+   page), never `splice`. Verified: validation errors don't silently
+   downgrade to pass-through.
+
+4. **Cert error recovery path**: When a non-validation negotiation error
+   occurs with a valid server cert present, Squid re-runs the ACL via
+   `checkForPeekAndSplice()`. The normal mode-based fallback applies
+   (stare→bump, peek→splice). Verified: this path behaves consistently
+   with the normal ACL evaluation.
+
+5. **`DefaultSpliceFallback`**: When `BumpNone` is returned at step 1
+   (no matching ACL rule), the outcome is always `splice` -- never
+   `bump`. This documents `checkForPeekAndSpliceGuess()` behavior.
+
 ### Safe configuration
 
 Use **stare** mode instead of **peek**. Stare mode generates a new
@@ -82,6 +99,9 @@ code --install-extension alygin.vscode-tlaplus
 | `SslBumpExhaustive.cfg` | Peek + encryptedCert, peek→peek→bump | **FAIL** (documents the bypass) |
 | `SslBumpResumption.cfg` | Peek + sessionResumption, peek→peek→bump | **FAIL** (NoUnintendedSplice violated) |
 | `SslBumpStare.cfg` | Stare + normalCert, stare→bump→bump | PASS (stare is safe) |
+| `SslBumpCertError.cfg` | Peek + certError + validation error | PASS (CertErrorNeverSplices holds) |
+| `SslBumpCertErrorRecovery.cfg` | Peek + certError, no validation error | PASS (ACL re-run, normal fallback) |
+| `SslBumpDefaultSplice.cfg` | BumpNone at step 1, no ACL match | PASS (DefaultSpliceFallback holds) |
 
 ### Run
 
