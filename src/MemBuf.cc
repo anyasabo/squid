@@ -70,6 +70,7 @@
  */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "mem/forward.h"
 #include "MemBuf.h"
 
@@ -92,7 +93,7 @@ MemBuf::init()
 void
 MemBuf::init(mb_size_t szInit, mb_size_t szMax)
 {
-    assert(szInit > 0 && szMax > 0);
+    Assure(szInit > 0 && szMax > 0);
     buf = nullptr;
     size = 0;
     max_capacity = szMax;
@@ -113,7 +114,8 @@ MemBuf::clean()
         // nothing to do
     } else {
         assert(buf);
-        assert(!stolen);    /* not frozen */
+        Assure(!stolen);/* not frozen */
+
 
         memFreeBuf(capacity, buf);
         buf = nullptr;
@@ -131,7 +133,8 @@ MemBuf::reset()
     if (isNull()) {
         init();
     } else {
-        assert(!stolen);    /* not frozen */
+        Assure(!stolen);/* not frozen */
+
         /* reset */
         memset(buf, 0, capacity);
         size = 0;
@@ -169,7 +172,8 @@ void MemBuf::consume(mb_size_t shiftSize)
 {
     const mb_size_t cSize = contentSize();
     assert(0 <= shiftSize && shiftSize <= cSize);
-    assert(!stolen); /* not frozen */
+    Assure(!stolen);/* not frozen */
+
 
     if (shiftSize > 0) {
         if (shiftSize < cSize)
@@ -198,7 +202,8 @@ void MemBuf::truncate(mb_size_t tailSize)
 {
     const mb_size_t cSize = contentSize();
     assert(0 <= tailSize && tailSize <= cSize);
-    assert(!stolen); /* not frozen */
+    Assure(!stolen);/* not frozen */
+
     size -= tailSize;
 }
 
@@ -208,9 +213,10 @@ void MemBuf::truncate(mb_size_t tailSize)
  */
 void MemBuf::append(const char *newContent, int sz)
 {
-    assert(sz >= 0);
-    assert(buf || (0==capacity && 0==size));
-    assert(!stolen); /* not frozen */
+    Assure(sz >= 0);
+    Assure(buf || (0==capacity && 0==size));
+    Assure(!stolen);/* not frozen */
+
 
     if (sz > 0) {
         if (size + sz + 1 > capacity)
@@ -251,9 +257,10 @@ void
 MemBuf::vappendf(const char *fmt, va_list vargs)
 {
     int sz = 0;
-    assert(fmt);
-    assert(buf);
-    assert(!stolen);    /* not frozen */
+    Assure(fmt);
+    Assure(buf);
+    Assure(!stolen);/* not frozen */
+
     /* assert in Grow should quit first, but we do not want to have a scary infinite loop */
 
     while (capacity <= max_capacity) {
@@ -303,8 +310,9 @@ FREE *
 MemBuf::freeFunc()
 {
     FREE *ff;
-    assert(buf);
-    assert(!stolen);    /* not frozen */
+    Assure(buf);
+    Assure(!stolen);/* not frozen */
+
 
     ff = memFreeBufFunc((size_t) capacity);
     stolen = 1;     /* freeze */
@@ -320,8 +328,8 @@ MemBuf::grow(mb_size_t min_cap)
     size_t new_cap;
     size_t buf_cap;
 
-    assert(!stolen);
-    assert(capacity < min_cap);
+    Assure(!stolen);
+    Assure(capacity < min_cap);
 
     /* determine next capacity */
 
@@ -358,7 +366,7 @@ MemBuf::grow(mb_size_t min_cap)
 void
 memBufReport(MemBuf * mb)
 {
-    assert(mb);
+    Assure(mb);
     mb->appendf("memBufReport is not yet implemented @?@\n");
 }
 

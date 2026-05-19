@@ -9,6 +9,7 @@
 /* DEBUG: section 83    SSL-Bump Server/Peer negotiation */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "base/IoManip.h"
 #include "sbuf/Stream.h"
 #include "security/Handshake.h"
@@ -598,7 +599,7 @@ Security::HandshakeParser::parseSupportedVersionsExtension(const SBuf &extension
         // TLS v1.3 client may try to negotiate a _legacy_ version X with a TLS
         // v1.3 server by sending supported_versions containing just X.
     } else {
-        assert(messageSource == fromServer);
+        Assure(messageSource == fromServer);
         Parser::BinaryTokenizer tkVersion(extensionData);
         const auto version = ParseOptionalProtocolVersion(tkVersion, "selected_version");
         // Ignore values unsupported by Squid. There should not be any until we
@@ -624,7 +625,7 @@ Security::HandshakeParser::parseSupportedVersionsExtension(const SBuf &extension
     // only the "supported_versions" extension to determine client preferences.
     // Servers MUST only select a version of TLS present in that extension
     debugs(83, 7, "found " << supportedVersionMax);
-    assert(supportedVersionMax);
+    Assure(supportedVersionMax);
     details->tlsSupportedVersion = supportedVersionMax;
 }
 

@@ -7,6 +7,7 @@
  */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "base/TextException.h"
 #include "debug/Stream.h"
 #include "http/one/TeChunkedParser.h"
@@ -81,7 +82,7 @@ Http::One::TeChunkedParser::parse(const SBuf &aBuf)
 bool
 Http::One::TeChunkedParser::needsMoreSpace() const
 {
-    assert(theOut);
+    Assure(theOut);
     return parsingStage_ == Http1::HTTP_PARSE_CHUNK && !theOut->hasPotentialSpace();
 }
 

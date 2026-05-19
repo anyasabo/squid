@@ -7,6 +7,7 @@
  */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "acl/Gadgets.h"
 #include "base/Here.h"
 #include "base/RegexPattern.h"
@@ -141,7 +142,7 @@ ConfigParser::UnQuote(const char *token, const char **next)
     const char *errorStr = nullptr;
     const char *errorPos = nullptr;
     char quoteChar = *token;
-    assert(quoteChar == '"' || quoteChar == '\'');
+    Assure(quoteChar == '"' || quoteChar == '\'');
     LOCAL_ARRAY(char, UnQuoted, CONFIG_LINE_LIMIT);
     const char  *s = token + 1;
     char *d = UnQuoted;
@@ -344,7 +345,7 @@ ConfigParser::NextToken()
             ConfigParser::CfgFile *wordfile = CfgFiles.top();
             token = wordfile->parse(LastTokenType);
             if (!token) {
-                assert(!wordfile->isOpen());
+                Assure(!wordfile->isOpen());
                 CfgFiles.pop();
                 debugs(3, 4, "CfgFiles.pop " << wordfile->filePath);
                 delete wordfile;
@@ -562,14 +563,14 @@ ConfigParser::QuoteString(const String &var)
 void
 ConfigParser::rejectDuplicateDirective()
 {
-    assert(cfg_directive);
+    Assure(cfg_directive);
     throw TextException("duplicate configuration directive", Here());
 }
 
 void
 ConfigParser::closeDirective()
 {
-    assert(cfg_directive);
+    Assure(cfg_directive);
     if (const auto garbage = PeekAtToken())
         throw TextException(ToSBuf("trailing garbage at the end of a configuration directive: ", garbage), Here());
     // TODO: cfg_directive = nullptr; // currently in generated code
@@ -588,7 +589,7 @@ ConfigParser::token(const char *expectedTokenDescription)
 bool
 ConfigParser::skipOptional(const char *keyword)
 {
-    assert(keyword);
+    Assure(keyword);
     if (const auto nextToken = PeekAtToken()) {
         if (strcmp(nextToken, keyword) == 0) {
             (void)NextToken();
@@ -607,7 +608,7 @@ ConfigParser::optionalAclList()
 
     ACLList *acls = nullptr;
     const auto aclCount = aclParseAclList(*this, &acls, cfg_directive);
-    assert(acls);
+    Assure(acls);
     if (aclCount <= 0)
         throw TextException("missing ACL name(s) after 'if' keyword", Here());
     return acls;
@@ -616,7 +617,7 @@ ConfigParser::optionalAclList()
 bool
 ConfigParser::CfgFile::startParse(char *path)
 {
-    assert(wordFile == nullptr);
+    Assure(wordFile == nullptr);
     debugs(3, 3, "Parsing from " << path);
     if ((wordFile = fopen(path, "r")) == nullptr) {
         debugs(3, DBG_CRITICAL, "WARNING: file :" << path << " not found");

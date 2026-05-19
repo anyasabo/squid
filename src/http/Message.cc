@@ -9,6 +9,7 @@
 /* DEBUG: section 74    HTTP Message */
 
 #include "squid.h"
+#include "base/Assure.h"
 #include "debug/Stream.h"
 #include "http/ContentLengthInterpreter.h"
 #include "http/Message.h"
@@ -67,7 +68,7 @@ httpMsgIsolateStart(const char **parse_start, const char **blk_start, const char
 bool
 Http::Message::parse(const char *buf, const size_t sz, bool eof, Http::StatusCode *error)
 {
-    assert(error);
+    Assure(error);
     *error = Http::scNone;
 
     // find the end of headers
@@ -105,7 +106,7 @@ Http::Message::parse(const char *buf, const size_t sz, bool eof, Http::StatusCod
         return false; // but this should not happen due to headersEnd() above
     }
 
-    assert(res > 0);
+    Assure(res > 0);
     debugs(58, 9, "success (" << hdr_len << " bytes) near '" << buf << "'");
 
     if (hdr_sz != (int)hdr_len) {
@@ -155,7 +156,7 @@ Http::Message::httpMsgParseStep(const char *buf, int len, int atEnd)
     const char *blk_start, *blk_end;
     const char **parse_end_ptr = &blk_end;
     assert(parse_start);
-    assert(pstate < Http::Message::psParsed);
+    Assure(pstate < Http::Message::psParsed);
 
     *parse_end_ptr = parse_start;
 
@@ -261,7 +262,7 @@ void
 Http::Message::hdrCacheInit()
 {
     content_length = header.getInt64(Http::HdrType::CONTENT_LENGTH);
-    assert(nullptr == cache_control);
+    Assure(nullptr == cache_control);
     cache_control = header.getCc();
 }
 
