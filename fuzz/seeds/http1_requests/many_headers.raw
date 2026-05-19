@@ -1,0 +1,12 @@
+GET / HTTP/1.1
+Host: example.com
+Accept: */*
+Accept-Encoding: gzip
+Accept-Language: en
+Cache-Control: no-cache
+Pragma: no-cache
+User-Agent: fuzzer/1.0
+X-Forwarded-For: 10.0.0.1
+Authorization: Basic dGVzdDp0ZXN0
+Proxy-Authorization: Basic dGVzdDp0ZXN0
+

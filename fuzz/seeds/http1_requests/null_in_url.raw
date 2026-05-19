@@ -1,0 +1,3 @@
+GET /allowed%00/blocked HTTP/1.1
+Host: example.com
+

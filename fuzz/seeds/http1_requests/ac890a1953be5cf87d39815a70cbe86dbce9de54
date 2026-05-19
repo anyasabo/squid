@@ -1,0 +1,3 @@
+GET /first HTTP/1.1
+Host: b.com
+

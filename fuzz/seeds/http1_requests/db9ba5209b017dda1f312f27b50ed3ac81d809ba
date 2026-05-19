@@ -1,0 +1,9 @@
+CONNECT exa/plGET /first HTTP/1.1
+Host: a.come.com:443 H`TP/1.1
+HostQ example.com:
+	
+GET443 /second HTTP/0.1
+Host: 
+
+b.com
+

@@ -1,0 +1,86 @@
+# URI fuzzing dictionary for Squid URI parser harness
+# Tokens from URI grammar (RFC 3986) and Squid-specific parsing
+# libFuzzer format: "string" per line, hex escapes for non-printable bytes
+
+# Schemes
+scheme_http="http://"
+scheme_https="https://"
+scheme_ftp="ftp://"
+scheme_urn="urn:"
+scheme_cache="cache_object://"
+scheme_whois="whois://"
+scheme_gopher="gopher://"
+
+# Authority delimiters
+at="@"
+colon=":"
+bracket_open="["
+bracket_close="]"
+
+# Path delimiters
+slash="/"
+double_slash="//"
+parent="/../"
+current="/./"
+dot_encoded="..%2f"
+encoded_parent="%2e%2e/"
+
+# Query/fragment
+question="?"
+hash="#"
+amp="&"
+eq="="
+
+# Port numbers
+port_80=":80"
+port_443=":443"
+port_8080=":8080"
+port_3128=":3128"
+port_0=":0"
+port_max=":65535"
+port_over=":99999"
+
+# IPv6 literals
+ipv6_lo="[::1]"
+ipv6_mapped="[::ffff:127.0.0.1]"
+ipv6_scope="[fe80::1%25eth0]"
+ipv6_full="[0000:0000:0000:0000:0000:0000:0000:0001]"
+
+# IPv4
+ipv4_lo="127.0.0.1"
+ipv4_any="0.0.0.0"
+ipv4_broadcast="255.255.255.255"
+
+# Percent-encoding
+pct_null="%00"
+pct_cr="%0d"
+pct_lf="%0a"
+pct_sp="%20"
+pct_pct="%25"
+pct_slash="%2f"
+pct_colon="%3a"
+pct_at="%40"
+pct_hash="%23"
+pct_question="%3f"
+
+# Special bytes
+null="\x00"
+tab="\x09"
+cr="\x0d"
+lf="\x0a"
+sp=" "
+
+# CONNECT-style targets
+connect_443="example.com:443"
+connect_80="example.com:80"
+
+# Absolute URIs
+uri_simple="http://example.com/"
+uri_full="http://example.com:8080/path?query=value#fragment"
+uri_auth="https://user:pass@example.com:443/path"
+uri_ftp="ftp://anonymous@ftp.example.com/pub/"
+
+# Edge cases
+wildcard="*"
+root="/"
+ipv6_path="http://[::1]:80/path"

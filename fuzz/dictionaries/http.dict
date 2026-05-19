@@ -1,0 +1,106 @@
+# HTTP fuzzing dictionary for Squid parser harnesses
+# Tokens from HTTP/1.x grammar (RFC 9110, 9112)
+# libFuzzer format: "string" per line, hex escapes for non-printable bytes
+
+# Methods
+method_get="GET"
+method_head="HEAD"
+method_post="POST"
+method_put="PUT"
+method_delete="DELETE"
+method_connect="CONNECT"
+method_options="OPTIONS"
+method_trace="TRACE"
+method_patch="PATCH"
+
+# Version strings
+ver_09="HTTP/0.9"
+ver_10="HTTP/1.0"
+ver_11="HTTP/1.1"
+ver_2="HTTP/2"
+
+# Line endings
+crlf="\x0d\x0a"
+lf="\x0a"
+cr="\x0d"
+null="\x00"
+
+# Delimiters
+colon_sp=": "
+semi_sp="; "
+comma_sp=", "
+slash="/"
+question="?"
+hash="#"
+at="@"
+eq="="
+amp="&"
+
+# Common headers
+hdr_host="Host: "
+hdr_cl="Content-Length: "
+hdr_te="Transfer-Encoding: "
+hdr_ct="Content-Type: "
+hdr_conn="Connection: "
+hdr_proxy_conn="Proxy-Connection: "
+hdr_cc="Cache-Control: "
+hdr_accept="Accept: "
+hdr_ae="Accept-Encoding: "
+hdr_ua="User-Agent: "
+hdr_auth="Authorization: "
+hdr_proxy_auth="Proxy-Authorization: "
+hdr_cookie="Cookie: "
+hdr_set_cookie="Set-Cookie: "
+hdr_referer="Referer: "
+hdr_xff="X-Forwarded-For: "
+hdr_xfh="X-Forwarded-Host: "
+hdr_via="Via: "
+hdr_expect="Expect: "
+hdr_upgrade="Upgrade: "
+
+# Transfer-Encoding values
+te_chunked="chunked"
+te_identity="identity"
+te_gzip="gzip"
+te_deflate="deflate"
+te_compress="compress"
+
+# Connection values
+conn_ka="keep-alive"
+conn_close="close"
+conn_upgrade="upgrade"
+
+# Smuggling-relevant constructs
+smuggle_te_chunked="Transfer-Encoding: chunked"
+smuggle_cl0="Content-Length: 0"
+smuggle_cl="Content-Length: "
+smuggle_te="Transfer-Encoding:"
+
+# Chunk encoding terminator
+chunk_end="0\x0d\x0a\x0d\x0a"
+
+# Status codes
+status_200="200 OK"
+status_301="301 Moved Permanently"
+status_302="302 Found"
+status_400="400 Bad Request"
+status_403="403 Forbidden"
+status_404="404 Not Found"
+status_407="407 Proxy Authentication Required"
+status_500="500 Internal Server Error"
+status_502="502 Bad Gateway"
+status_503="503 Service Unavailable"
+
+# obs-fold (obsolete line folding)
+obsfold_sp="\x0d\x0a "
+obsfold_tab="\x0d\x0a\x09"
+
+# Percent-encoded special characters
+pct_null="%00"
+pct_cr="%0d"
+pct_lf="%0a"
+pct_sp="%20"
+pct_pct="%25"
+
+# Expect header
+expect_100="100-continue"
