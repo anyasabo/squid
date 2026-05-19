@@ -2101,6 +2101,99 @@ tests_testAclDomainMatching_LDADD = \
 	$(XTRA_LIBS)
 tests_testAclDomainMatching_LDFLAGS = $(LIBADD_DL)
 
+check_PROGRAMS += tests/testAclServerName
+tests_testAclServerName_SOURCES = \
+	tests/testAclServerName.cc \
+	acl/DomainData.cc \
+	anyp/Uri.cc \
+	anyp/UriScheme.cc \
+	anyp/Host.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_client_side.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	tests/stub_cache_manager.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclServerName_SOURCES = \
+	$(TESTSOURCES) \
+	anyp/ProtocolType.cc \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libsecurity.cc \
+	tests/stub_libtime.cc
+tests_testAclServerName_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(SSLLIB) \
+	$(XTRA_LIBS)
+tests_testAclServerName_LDFLAGS = $(LIBADD_DL)
+
+check_PROGRAMS += tests/testAclFailOpen
+tests_testAclFailOpen_SOURCES = \
+	tests/testAclFailOpen.cc \
+	anyp/Uri.cc \
+	anyp/UriScheme.cc \
+	anyp/Host.cc \
+	String.cc \
+	tests/stub_AclNode.cc \
+	tests/stub_acl.cc \
+	tests/stub_cache_cf.cc \
+	tests/stub_cbdata.cc \
+	tests/stub_fatal.cc \
+	tests/stub_HttpHeader.cc \
+	tests/stub_HttpRequest.cc \
+	tests/stub_HttpReply.cc \
+	tests/stub_neighbors.cc \
+	tests/stub_client_side.cc \
+	tests/stub_StatHist.cc \
+	tests/stub_access_log.cc \
+	tests/stub_cache_manager.cc \
+	ConfigParser.cc \
+	helper/ChildConfig.cc \
+	Parsing.cc \
+	wordlist.cc \
+	MemBuf.cc
+nodist_tests_testAclFailOpen_SOURCES = \
+	$(TESTSOURCES) \
+	anyp/ProtocolType.cc \
+	tests/stub_debug.cc \
+	tests/stub_libmem.cc \
+	tests/stub_libhttp.cc \
+	tests/stub_libsecurity.cc \
+	tests/stub_libtime.cc
+tests_testAclFailOpen_LDADD = \
+	ip/libip.la \
+	sbuf/libsbuf.la \
+	base/libbase.la \
+	parser/libparser.la \
+	$(top_builddir)/lib/libmiscutil.la \
+	$(top_builddir)/lib/libmiscencoding.la \
+	$(LIBCPPUNIT_LIBS) \
+	$(COMPAT_LIB) \
+	$(SSLLIB) \
+	$(XTRA_LIBS)
+tests_testAclFailOpen_LDFLAGS = $(LIBADD_DL)
+
 ## Tests of icmp/*
 
 check_PROGRAMS += tests/testIcmp
