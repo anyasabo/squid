@@ -13,7 +13,7 @@ ENV CC=clang
 ENV CXX=clang++
 
 WORKDIR /squid
-COPY squid/ /squid/
+COPY . /squid/
 
 RUN ./bootstrap.sh
 
@@ -64,7 +64,7 @@ RUN cd src && \
         tests/stub_liberror.cc tests/stub_libformat.cc \
         tests/stub_libmgr.cc tests/stub_libsslsquid.cc \
         tests/stub_neighbors.cc tests/stub_Instance.cc \
-        globals.cc; do \
+        globals.cc MemBuf.cc String.cc mime_header.cc wordlist.cc; do \
         out=$(echo "$stub" | sed 's|\.cc$|.o|'); \
         clang++ $STUB_FLAGS \
             -c "$stub" -o "$out" || echo "  FAILED: $stub"; \
@@ -82,10 +82,10 @@ RUN ls src/http/.libs/libhttp.a \
        src/globals.o \
        src/test_tools.o
 
-RUN mkdir -p /fuzz/build
-COPY fuzz/harnesses/ /fuzz/harnesses/
-COPY fuzz/seeds/ /fuzz/seeds/
-COPY fuzz/dictionaries/ /fuzz/dictionaries/
+RUN mkdir -p /fuzz/build && \
+    cp -r /squid/fuzz/harnesses /fuzz/harnesses && \
+    cp -r /squid/fuzz/seeds /fuzz/seeds && \
+    cp -r /squid/fuzz/dictionaries /fuzz/dictionaries
 
 WORKDIR /fuzz
 
@@ -254,6 +254,39 @@ RUN echo "=== Building fuzz_tls_handshake ===" && \
         -Wl,--end-group \
         $COMMON_SYSLIBS \
         -o build/fuzz_tls_handshake && \
+    echo "  OK"
+
+# Cache-Control parser
+RUN echo "=== Building fuzz_cache_control ===" && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        -c harnesses/cc_helpers.cc -o build/cc_helpers.o && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_cache_control.cc \
+        $COMMON_STUBS /squid/src/tests/stub_libanyp.o \
+        /squid/src/HttpHdrCc.o \
+        build/cc_helpers.o \
+        $COMMON_LIBS $COMMON_SYSLIBS \
+        -o build/fuzz_cache_control && \
+    echo "  OK"
+
+# DNS message parser
+RUN echo "=== Building fuzz_dns_message ===" && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_dns_message.cc \
+        $COMMON_STUBS /squid/src/tests/stub_libanyp.o \
+        /squid/src/dns/rfc1035.o /squid/src/dns/rfc2671.o \
+        $COMMON_LIBS $COMMON_SYSLIBS \
+        -o build/fuzz_dns_message && \
+    echo "  OK"
+
+# FTP address parsing
+RUN echo "=== Building fuzz_ftp_parsing ===" && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_ftp_parsing.cc \
+        $COMMON_STUBS /squid/src/tests/stub_libanyp.o \
+        /squid/src/ftp/Parsing.o \
+        $COMMON_LIBS $COMMON_SYSLIBS \
+        -o build/fuzz_ftp_parsing && \
     echo "  OK"
 
 RUN echo "=== Built harnesses ===" && ls -la build/fuzz_* 2>/dev/null || echo "(none built)"
