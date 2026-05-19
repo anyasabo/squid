@@ -341,11 +341,17 @@ log_quoted_string(const char *str, char *out)
     *p = '\0';
 }
 
-/// XXX: Misnamed. TODO: Split <h (and this function) to distinguish received
-/// headers from sent headers rather than failing to distinguish requests from responses.
-/// \retval HttpReply sent to the HTTP client (access.log and default context).
-/// \retval HttpReply received (encapsulated) from the ICAP server (icap.log context).
-/// \retval HttpRequest received (encapsulated) from the ICAP server (icap.log context).
+/// Returns the reply/response message for header-logging format codes.
+///
+/// In access.log context: the reply sent to the HTTP client.
+/// In icap.log context with reqmod: the encapsulated request from ICAP.
+/// In icap.log context with respmod: the encapsulated reply from ICAP.
+///
+/// NB: Despite returning a "reply", callers use this for both `>h` (sent
+/// reply headers) and for `<h` response-related header extraction. The
+/// distinction between "headers we sent" vs "headers we received" is not
+/// captured by this single function -- all callers should document which
+/// direction they intend.
 static const Http::Message *
 actualReplyHeader(const AccessLogEntry::Pointer &al)
 {
@@ -358,15 +364,23 @@ actualReplyHeader(const AccessLogEntry::Pointer &al)
     return msg;
 }
 
-/// XXX: Misnamed. See actualReplyHeader().
-/// \return HttpRequest or HttpReply for %http::>h.
+/// Returns the request message for header-logging format codes.
+///
+/// In access.log context: the virgin HTTP request from the client.
+/// In icap.log context with respmod: returns nullptr because
+/// AccessLogEntry currently lacks virgin response headers -- the
+/// adapted_request and virgin request are available but the virgin
+/// *response* (before ICAP modification) is not stored.
+///
+/// TODO: Store virgin response headers in AccessLogEntry for ICAP respmod
+/// so that `<h` can show what the origin server actually sent before ICAP
+/// modified it. This is tracked in the upstream TODO for Format.cc.
 static const Http::Message *
 actualRequestHeader(const AccessLogEntry::Pointer &al)
 {
 #if ICAP_CLIENT
     // al->icap.reqMethod is methodNone in access.log context
     if (al->icap.reqMethod == Adaptation::methodRespmod) {
-        // XXX: for now AccessLogEntry lacks virgin response headers
         return nullptr;
     }
 #endif
@@ -902,33 +916,37 @@ Format::Format::assemble(MemBuf &mb, const AccessLogEntry::Pointer &al, int logS
             break;
 
         case LFT_REQUEST_ALL_HEADERS:
+            // Format code: <h (all received request headers)
+            // Returns raw headers without start-line, stored at parse time.
+            // NB: For ICAP respmod, the "received" message is a response,
+            // but we lack virgin response headers in AccessLogEntry::Headers.
 #if ICAP_CLIENT
             if (al->icap.reqMethod == Adaptation::methodRespmod) {
-                // XXX: since AccessLogEntry::Headers lacks virgin response
-                // headers, do nothing for now
                 out = nullptr;
             } else
 #endif
             {
-                // just headers without start-line and CRLF
-                // XXX: reconcile with '<h'
                 out = al->headers.request;
                 quote = 1;
             }
             break;
 
         case LFT_ADAPTED_REQUEST_ALL_HEADERS:
-            // just headers without start-line and CRLF
-            // XXX: reconcile with '<h'
+            // Format code: <ha (all adapted request headers)
+            // Returns headers after adaptation/redirection, without start-line.
+            // Contrast with <h which shows virgin headers.
             out = al->headers.adapted_request;
             quote = 1;
             break;
 
         case LFT_REPLY_ALL_HEADERS: {
+            // Format code: >h (all reply headers sent to client)
+            // Returns status-line + headers + CRLF via packReplyHeaders().
+            // NB: Unlike <h which omits the start-line, >h includes it.
+            // This asymmetry is historical; both should ideally behave the
+            // same way (headers only, with a separate code for start-line).
             MemBuf allHeaders;
             allHeaders.init();
-            // status-line + headers + CRLF
-            // XXX: reconcile with '>h' and '>ha'
             al->packReplyHeaders(allHeaders);
             sb.assign(allHeaders.content(), allHeaders.contentSize());
             out = sb.c_str();
