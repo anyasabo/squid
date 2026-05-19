@@ -69,6 +69,14 @@ for stub in \
     tests/stub_libsecurity.cc tests/stub_stmem.cc tests/stub_store.cc \
     tests/stub_store_stats.cc tests/stub_tools.cc tests/stub_libtime.cc \
     tests/stub_fatal.cc \
+    tests/stub_CachePeer.cc tests/stub_ETag.cc \
+    tests/stub_HttpRequest.cc tests/stub_StatHist.cc \
+    tests/stub_access_log.cc tests/stub_client_side.cc \
+    tests/stub_errorpage.cc tests/stub_fd.cc tests/stub_fde.cc \
+    tests/stub_libauth.cc tests/stub_libcomm.cc \
+    tests/stub_liberror.cc tests/stub_libformat.cc \
+    tests/stub_libmgr.cc tests/stub_libsslsquid.cc \
+    tests/stub_neighbors.cc tests/stub_Instance.cc \
     globals.cc MemBuf.cc String.cc mime_header.cc wordlist.cc; do
     out=$(echo "$stub" | sed 's|\.cc$|.o|')
     if [ -f "$out" ]; then continue; fi
@@ -156,14 +164,121 @@ $CXX $HARNESS_CXXFLAGS $INC \
     $LIB_FUZZING_ENGINE \
     -o $OUT/fuzz_uri_parser
 
+# --- fuzz_http_header_parser (mirrors testHttpReply deps) ---
+HDR_STUBS="\
+    $S/tests/stub_CachePeer.o \
+    $S/tests/stub_ETag.o \
+    $S/tests/stub_HttpRequest.o \
+    $S/tests/stub_StatHist.o \
+    $S/tests/stub_access_log.o \
+    $S/tests/stub_client_side.o \
+    $S/tests/stub_errorpage.o \
+    $S/tests/stub_fd.o \
+    $S/tests/stub_fde.o \
+    $S/tests/stub_libauth.o \
+    $S/tests/stub_libcomm.o \
+    $S/tests/stub_liberror.o \
+    $S/tests/stub_libformat.o \
+    $S/tests/stub_libmgr.o \
+    $S/tests/stub_libsslsquid.o \
+    $S/tests/stub_neighbors.o \
+    $S/tests/stub_Instance.o"
+
+HEADER_OBJS="\
+    $S/HttpHeader.o \
+    $S/HttpHeaderTools.o \
+    $S/HttpHdrCc.o \
+    $S/HttpHdrContRange.o \
+    $S/HttpHdrRange.o \
+    $S/HttpHdrSc.o \
+    $S/HttpHdrScTarget.o \
+    $S/HttpBody.o \
+    $S/HttpControlMsg.o \
+    $S/HttpReply.o \
+    $S/ConfigParser.o \
+    $S/MasterXaction.o \
+    $S/Notes.o \
+    $S/StatCounters.o \
+    $S/CommCalls.o \
+    $S/StrList.o \
+    $S/Parsing.o \
+    $S/cbdata.o \
+    $S/hier_code.o"
+
+HEADER_LIBS="-Wl,--start-group \
+    $S/http/.libs/libhttp.a \
+    $S/parser/.libs/libparser.a \
+    $S/acl/.libs/libacls.a \
+    $S/acl/.libs/libapi.a \
+    $S/acl/.libs/libstate.a \
+    $S/anyp/.libs/libanyp.a \
+    $S/ip/.libs/libip.a \
+    $S/base/.libs/libbase.a \
+    $S/ipc/.libs/libipc.a \
+    $S/sbuf/.libs/libsbuf.a \
+    $SRC/squid/lib/.libs/libmisccontainers.a \
+    $SRC/squid/lib/.libs/libmiscutil.a \
+    $SRC/squid/lib/.libs/libmiscencoding.a \
+    $SRC/squid/compat/.libs/libcompatsquid.a \
+    -Wl,--end-group"
+
+# Exclude stub_cbdata since we use real cbdata.o
+HDR_BASE_STUBS=$(echo "$STUBS" | sed 's|[^ ]*/stub_cbdata\.o||')
+
+$CXX $HARNESS_CXXFLAGS $INC \
+    $FUZZ/harnesses/fuzz_http_header_parser.cc \
+    $HDR_BASE_STUBS $HDR_STUBS \
+    $HEADER_OBJS \
+    $HEADER_LIBS $SYSLIBS \
+    $LIB_FUZZING_ENGINE \
+    -o $OUT/fuzz_http_header_parser
+
+# --- fuzz_content_length ---
+$CXX $HARNESS_CXXFLAGS $INC \
+    -c $FUZZ/harnesses/cl_helpers.cc \
+    -o $WORK/cl_helpers.o
+
+$CXX $HARNESS_CXXFLAGS $INC \
+    $FUZZ/harnesses/fuzz_content_length.cc \
+    $STUBS $S/tests/stub_libanyp.o \
+    $WORK/cl_helpers.o \
+    $LIBS $SYSLIBS \
+    $LIB_FUZZING_ENGINE \
+    -o $OUT/fuzz_content_length
+
+# --- fuzz_tls_handshake (uses real libsecurity, not stub) ---
+TLS_STUBS=$(echo "$STUBS" | sed 's|[^ ]*/stub_libsecurity\.o||')
+
+$CXX $HARNESS_CXXFLAGS $INC \
+    $FUZZ/harnesses/fuzz_tls_handshake.cc \
+    $TLS_STUBS $S/tests/stub_libanyp.o \
+    -Wl,--start-group \
+    $S/security/.libs/libsecurity.a \
+    $S/http/.libs/libhttp.a \
+    $S/parser/.libs/libparser.a \
+    $S/anyp/.libs/libanyp.a \
+    $S/base/.libs/libbase.a \
+    $S/ip/.libs/libip.a \
+    $S/sbuf/.libs/libsbuf.a \
+    $SRC/squid/lib/.libs/libmiscutil.a \
+    $SRC/squid/lib/.libs/libmiscencoding.a \
+    $SRC/squid/compat/.libs/libcompatsquid.a \
+    -Wl,--end-group \
+    $SYSLIBS \
+    $LIB_FUZZING_ENGINE \
+    -o $OUT/fuzz_tls_handshake
+
 # --- Seed corpora ---
 cd $FUZZ/seeds
-for dir in http1_requests http1_responses uris; do
+for dir in http1_requests http1_responses uris http_headers content_lengths tls_handshakes; do
     harness=""
     case "$dir" in
         http1_requests)  harness="fuzz_http1_request_parser" ;;
         http1_responses) harness="fuzz_http1_response_parser" ;;
         uris)            harness="fuzz_uri_parser" ;;
+        http_headers)    harness="fuzz_http_header_parser" ;;
+        content_lengths) harness="fuzz_content_length" ;;
+        tls_handshakes)  harness="fuzz_tls_handshake" ;;
     esac
     if [ -d "$dir" ] && [ -n "$harness" ]; then
         zip -j $OUT/${harness}_seed_corpus.zip $dir/*
@@ -174,3 +289,6 @@ done
 cp $FUZZ/dictionaries/http.dict $OUT/fuzz_http1_request_parser.dict
 cp $FUZZ/dictionaries/http.dict $OUT/fuzz_http1_response_parser.dict
 cp $FUZZ/dictionaries/uri.dict $OUT/fuzz_uri_parser.dict
+cp $FUZZ/dictionaries/http.dict $OUT/fuzz_http_header_parser.dict
+cp $FUZZ/dictionaries/http.dict $OUT/fuzz_content_length.dict
+cp $FUZZ/dictionaries/tls.dict $OUT/fuzz_tls_handshake.dict

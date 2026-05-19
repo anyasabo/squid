@@ -144,6 +144,14 @@ do_make() {
         tests/stub_libsecurity.cc tests/stub_stmem.cc tests/stub_store.cc \
         tests/stub_store_stats.cc tests/stub_tools.cc tests/stub_libtime.cc \
         tests/stub_fatal.cc \
+        tests/stub_CachePeer.cc tests/stub_ETag.cc \
+        tests/stub_HttpRequest.cc tests/stub_StatHist.cc \
+        tests/stub_access_log.cc tests/stub_client_side.cc \
+        tests/stub_errorpage.cc tests/stub_fd.cc tests/stub_fde.cc \
+        tests/stub_libauth.cc tests/stub_libcomm.cc \
+        tests/stub_liberror.cc tests/stub_libformat.cc \
+        tests/stub_libmgr.cc tests/stub_libsslsquid.cc \
+        tests/stub_neighbors.cc tests/stub_Instance.cc \
         globals.cc MemBuf.cc String.cc mime_header.cc wordlist.cc; do
         out=$(echo "$stub" | sed 's|\.cc$|.o|')
         if [[ -f "$out" ]]; then continue; fi
@@ -240,6 +248,110 @@ do_harnesses() {
         "$BUILD_DIR/uri_typeinfo_stubs.o" \
         $LIBS $SYSLIBS $FUZZER_LINK_LIB \
         -o "$BUILD_DIR/fuzz_uri_parser"
+
+    # Extra stubs for the HttpHeader harness (mirrors testHttpReply deps)
+    HDR_STUBS="\
+        $S/tests/stub_CachePeer.o \
+        $S/tests/stub_ETag.o \
+        $S/tests/stub_HttpRequest.o \
+        $S/tests/stub_StatHist.o \
+        $S/tests/stub_access_log.o \
+        $S/tests/stub_client_side.o \
+        $S/tests/stub_errorpage.o \
+        $S/tests/stub_fd.o \
+        $S/tests/stub_fde.o \
+        $S/tests/stub_libauth.o \
+        $S/tests/stub_libcomm.o \
+        $S/tests/stub_liberror.o \
+        $S/tests/stub_libformat.o \
+        $S/tests/stub_libmgr.o \
+        $S/tests/stub_libsslsquid.o \
+        $S/tests/stub_neighbors.o \
+        $S/tests/stub_Instance.o"
+
+    HEADER_OBJS="\
+        $S/HttpHeader.o \
+        $S/HttpHeaderTools.o \
+        $S/HttpHdrCc.o \
+        $S/HttpHdrContRange.o \
+        $S/HttpHdrRange.o \
+        $S/HttpHdrSc.o \
+        $S/HttpHdrScTarget.o \
+        $S/HttpBody.o \
+        $S/HttpControlMsg.o \
+        $S/HttpReply.o \
+        $S/ConfigParser.o \
+        $S/MasterXaction.o \
+        $S/Notes.o \
+        $S/StatCounters.o \
+        $S/CommCalls.o \
+        $S/StrList.o \
+        $S/Parsing.o \
+        $S/cbdata.o \
+        $S/hier_code.o"
+
+    HEADER_LIBS="$GROUP_START \
+        $S/http/.libs/libhttp.a \
+        $S/parser/.libs/libparser.a \
+        $S/acl/.libs/libacls.a \
+        $S/acl/.libs/libapi.a \
+        $S/acl/.libs/libstate.a \
+        $S/anyp/.libs/libanyp.a \
+        $S/ip/.libs/libip.a \
+        $S/base/.libs/libbase.a \
+        $S/ipc/.libs/libipc.a \
+        $S/sbuf/.libs/libsbuf.a \
+        $SQUID_SRC/lib/.libs/libmisccontainers.a \
+        $SQUID_SRC/lib/.libs/libmiscutil.a \
+        $SQUID_SRC/lib/.libs/libmiscencoding.a \
+        $SQUID_SRC/compat/.libs/libcompatsquid.a \
+        $GROUP_END"
+
+    # --- HTTP header parser ---
+    # Uses real cbdata.o, so exclude stub_cbdata from STUBS
+    HDR_BASE_STUBS=$(echo "$STUBS" | sed 's|[^ ]*/stub_cbdata\.o||')
+    echo "  Building fuzz_http_header_parser..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_http_header_parser.cc" \
+        $HDR_BASE_STUBS $HDR_STUBS \
+        $HEADER_OBJS \
+        $HEADER_LIBS $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_http_header_parser"
+
+    # --- Content-Length interpreter ---
+    echo "  Compiling CL helper stubs..."
+    "$CXX" $OPT_FLAGS $SANITIZER_FLAGS $FUZZER_COMPILE -std=c++17 \
+        -DHAVE_CONFIG_H -DSTUB_THROWS $INC \
+        -c "$HARNESS_DIR/cl_helpers.cc" \
+        -o "$BUILD_DIR/cl_helpers.o"
+    echo "  Building fuzz_content_length..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_content_length.cc" \
+        $STUBS $S/tests/stub_libanyp.o \
+        "$BUILD_DIR/cl_helpers.o" \
+        $LIBS $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_content_length"
+
+    # --- TLS handshake parser (uses real libsecurity, not stub) ---
+    TLS_STUBS=$(echo "$STUBS" | sed 's|[^ ]*/stub_libsecurity\.o||')
+    echo "  Building fuzz_tls_handshake..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_tls_handshake.cc" \
+        $TLS_STUBS $S/tests/stub_libanyp.o \
+        $GROUP_START \
+        $S/security/.libs/libsecurity.a \
+        $S/http/.libs/libhttp.a \
+        $S/parser/.libs/libparser.a \
+        $S/anyp/.libs/libanyp.a \
+        $S/base/.libs/libbase.a \
+        $S/ip/.libs/libip.a \
+        $S/sbuf/.libs/libsbuf.a \
+        $SQUID_SRC/lib/.libs/libmiscutil.a \
+        $SQUID_SRC/lib/.libs/libmiscencoding.a \
+        $SQUID_SRC/compat/.libs/libcompatsquid.a \
+        $GROUP_END \
+        $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_tls_handshake"
 
     echo ""
     echo "=== Built harnesses ==="

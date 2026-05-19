@@ -14,6 +14,9 @@ against `$LIB_FUZZING_ENGINE` (libFuzzer, AFL++, Honggfuzz, or Centipede).
 | `fuzz_http1_request_parser` | `Http::One::RequestParser::parse()` | SQUID-2024:2, 2023:1, 2020:1 |
 | `fuzz_http1_response_parser` | `Http::One::ResponseParser::parse()` | SQUID-2024:1, CVE-2021-33620/28662 |
 | `fuzz_uri_parser` | `AnyP::Uri::parse()` | SQUID-2025:1, 2019:8 |
+| `fuzz_http_header_parser` | `HttpHeader::parse()` | SQUID-2024:2 (header DoS), MegaManSec crashes |
+| `fuzz_content_length` | `Http::ContentLengthInterpreter::checkField()` | HTTP smuggling vector |
+| `fuzz_tls_handshake` | `Security::HandshakeParser::parseHello()` | ssl_bump peek/splice bypass |
 
 ## Setup
 
@@ -70,9 +73,12 @@ make docker-run     # run HTTP/1 request parser fuzzer
 ```bash
 # Run a specific fuzzer (with dictionary)
 make run TARGET=fuzz_http1_response_parser SEEDS=http1_responses
-make run TARGET=fuzz_uri_parser SEEDS=uris
+make run TARGET=fuzz_uri_parser SEEDS=uris DICT=uri.dict
+make run TARGET=fuzz_http_header_parser SEEDS=http_headers
+make run TARGET=fuzz_content_length SEEDS=content_lengths
+make run TARGET=fuzz_tls_handshake SEEDS=tls_handshakes DICT=tls.dict
 
-# Run all three fuzzers for 5 minutes each
+# Run all six fuzzers for 5 minutes each
 make run-all
 
 # Docker equivalents
@@ -169,9 +175,16 @@ python3 infra/helper.py run_fuzzer squid fuzz_http1_request_parser
 Each harness links against Squid's static libraries the same way unit tests do.
 Different harnesses use different stub sets:
 
-- **HTTP parsers** use `stub_libanyp.o` (stubs out URI parsing they don't need)
+- **HTTP/1 parsers** use `stub_libanyp.o` (stubs out URI parsing they don't need)
 - **URI parser** links the real `libanyp.a` and uses `uri_typeinfo_stubs.cc`
   to provide RTTI symbols for classes referenced but never instantiated
+- **HTTP header parser** mirrors `testHttpReply`'s link set from `Makefile.am` --
+  real `HttpHeader.o`, `cbdata.o`, and ACL libs; uses `stub_HttpRequest.o`,
+  `stub_StatHist.o`, etc. for functionality not exercised by parsing
+- **Content-Length** uses `cl_helpers.cc` providing minimal `httpHeaderParseOffset`
+  and `strListGetItem` implementations, avoiding the deep dependency chain from
+  `HttpHeaderTools.o` and `StrList.o`
+- **TLS handshake** links real `libsecurity.a` instead of `stub_libsecurity.o`
 
 On Linux, `-Wl,--start-group`/`--end-group` handles circular dependencies
 between static libraries. On macOS, `ld64` rescans archives by default.
@@ -187,11 +200,10 @@ To add a new fuzz target:
 5. If the target needs types not in the common stubs, add typeinfo stubs
 
 Good candidates for new targets:
-- `HttpHeader::parse()` -- header field parsing
 - `HttpHdrCc::parse()` -- Cache-Control header
-- `ContentLengthInterpreter::checkField()` -- Content-Length framing (smuggling-critical)
-- `security/Handshake.cc` -- TLS ClientHello parsing
 - `rfc1035MessageUnpack()` -- DNS response parsing
+- `mime_decode_header_val()` -- MIME header decoding
+- `FTP::LoginParser()` -- FTP command parsing
 
 ## Prior Art
 

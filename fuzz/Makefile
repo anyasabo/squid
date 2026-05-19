@@ -49,7 +49,10 @@ run-all:
 	@for triple in \
 		"fuzz_http1_request_parser:http1_requests:http.dict" \
 		"fuzz_http1_response_parser:http1_responses:http.dict" \
-		"fuzz_uri_parser:uris:uri.dict"; do \
+		"fuzz_uri_parser:uris:uri.dict" \
+		"fuzz_http_header_parser:http_headers:http.dict" \
+		"fuzz_content_length:content_lengths:http.dict" \
+		"fuzz_tls_handshake:tls_handshakes:tls.dict"; do \
 		target=$$(echo $$triple | cut -d: -f1); \
 		seeds=$$(echo $$triple | cut -d: -f2); \
 		dict=$$(echo $$triple | cut -d: -f3); \
@@ -89,7 +92,10 @@ docker-run-all:
 	@for triple in \
 		"fuzz_http1_request_parser:http1_requests:http.dict" \
 		"fuzz_http1_response_parser:http1_responses:http.dict" \
-		"fuzz_uri_parser:uris:uri.dict"; do \
+		"fuzz_uri_parser:uris:uri.dict" \
+		"fuzz_http_header_parser:http_headers:http.dict" \
+		"fuzz_content_length:content_lengths:http.dict" \
+		"fuzz_tls_handshake:tls_handshakes:tls.dict"; do \
 		target=$$(echo $$triple | cut -d: -f1); \
 		seeds=$$(echo $$triple | cut -d: -f2); \
 		dict=$$(echo $$triple | cut -d: -f3); \

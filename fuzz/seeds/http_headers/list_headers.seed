@@ -1,0 +1,4 @@
+Via: 1.1 proxy1, 1.0 proxy2
+X-Forwarded-For: 10.0.0.1, 192.168.1.1
+Cookie: session=abc123; user=test
+

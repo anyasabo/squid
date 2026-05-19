@@ -56,6 +56,14 @@ RUN cd src && \
         tests/stub_libsecurity.cc tests/stub_stmem.cc tests/stub_store.cc \
         tests/stub_store_stats.cc tests/stub_tools.cc tests/stub_libtime.cc \
         tests/stub_fatal.cc \
+        tests/stub_CachePeer.cc tests/stub_ETag.cc \
+        tests/stub_HttpRequest.cc tests/stub_StatHist.cc \
+        tests/stub_access_log.cc tests/stub_client_side.cc \
+        tests/stub_errorpage.cc tests/stub_fd.cc tests/stub_fde.cc \
+        tests/stub_libauth.cc tests/stub_libcomm.cc \
+        tests/stub_liberror.cc tests/stub_libformat.cc \
+        tests/stub_libmgr.cc tests/stub_libsslsquid.cc \
+        tests/stub_neighbors.cc tests/stub_Instance.cc \
         globals.cc; do \
         out=$(echo "$stub" | sed 's|\.cc$|.o|'); \
         clang++ $STUB_FLAGS \
@@ -150,6 +158,102 @@ RUN echo "=== Building fuzz_uri_parser ===" && \
         build/uri_typeinfo_stubs.o \
         $COMMON_LIBS $COMMON_SYSLIBS \
         -o build/fuzz_uri_parser && \
+    echo "  OK"
+
+# HTTP header parser (mirrors testHttpReply deps from Makefile.am)
+RUN echo "=== Building fuzz_http_header_parser ===" && \
+    HDR_BASE_STUBS=$(echo "$COMMON_STUBS" | sed 's|[^ ]*/stub_cbdata\.o||') && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_http_header_parser.cc \
+        $HDR_BASE_STUBS \
+        /squid/src/tests/stub_CachePeer.o \
+        /squid/src/tests/stub_ETag.o \
+        /squid/src/tests/stub_HttpRequest.o \
+        /squid/src/tests/stub_StatHist.o \
+        /squid/src/tests/stub_access_log.o \
+        /squid/src/tests/stub_client_side.o \
+        /squid/src/tests/stub_errorpage.o \
+        /squid/src/tests/stub_fd.o \
+        /squid/src/tests/stub_fde.o \
+        /squid/src/tests/stub_libauth.o \
+        /squid/src/tests/stub_libcomm.o \
+        /squid/src/tests/stub_liberror.o \
+        /squid/src/tests/stub_libformat.o \
+        /squid/src/tests/stub_libmgr.o \
+        /squid/src/tests/stub_libsslsquid.o \
+        /squid/src/tests/stub_neighbors.o \
+        /squid/src/tests/stub_Instance.o \
+        /squid/src/HttpHeader.o \
+        /squid/src/HttpHeaderTools.o \
+        /squid/src/HttpHdrCc.o \
+        /squid/src/HttpHdrContRange.o \
+        /squid/src/HttpHdrRange.o \
+        /squid/src/HttpHdrSc.o \
+        /squid/src/HttpHdrScTarget.o \
+        /squid/src/HttpBody.o \
+        /squid/src/HttpControlMsg.o \
+        /squid/src/HttpReply.o \
+        /squid/src/ConfigParser.o \
+        /squid/src/MasterXaction.o \
+        /squid/src/Notes.o \
+        /squid/src/StatCounters.o \
+        /squid/src/CommCalls.o \
+        /squid/src/StrList.o \
+        /squid/src/Parsing.o \
+        /squid/src/cbdata.o \
+        /squid/src/hier_code.o \
+        -Wl,--start-group \
+        /squid/src/http/.libs/libhttp.a \
+        /squid/src/parser/.libs/libparser.a \
+        /squid/src/acl/.libs/libacls.a \
+        /squid/src/acl/.libs/libapi.a \
+        /squid/src/acl/.libs/libstate.a \
+        /squid/src/anyp/.libs/libanyp.a \
+        /squid/src/ip/.libs/libip.a \
+        /squid/src/base/.libs/libbase.a \
+        /squid/src/ipc/.libs/libipc.a \
+        /squid/src/sbuf/.libs/libsbuf.a \
+        /squid/lib/.libs/libmisccontainers.a \
+        /squid/lib/.libs/libmiscutil.a \
+        /squid/lib/.libs/libmiscencoding.a \
+        /squid/compat/.libs/libcompatsquid.a \
+        -Wl,--end-group \
+        $COMMON_SYSLIBS \
+        -o build/fuzz_http_header_parser && \
+    echo "  OK"
+
+# Content-Length interpreter
+RUN echo "=== Building fuzz_content_length ===" && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        -c harnesses/cl_helpers.cc -o build/cl_helpers.o && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_content_length.cc \
+        $COMMON_STUBS /squid/src/tests/stub_libanyp.o \
+        build/cl_helpers.o \
+        $COMMON_LIBS $COMMON_SYSLIBS \
+        -o build/fuzz_content_length && \
+    echo "  OK"
+
+# TLS handshake parser (uses real libsecurity, not stub)
+RUN echo "=== Building fuzz_tls_handshake ===" && \
+    TLS_STUBS=$(echo "$COMMON_STUBS" | sed 's|[^ ]*/stub_libsecurity\.o||') && \
+    clang++ $FUZZ_LINK $FUZZ_INC \
+        harnesses/fuzz_tls_handshake.cc \
+        $TLS_STUBS /squid/src/tests/stub_libanyp.o \
+        -Wl,--start-group \
+        /squid/src/security/.libs/libsecurity.a \
+        /squid/src/http/.libs/libhttp.a \
+        /squid/src/parser/.libs/libparser.a \
+        /squid/src/anyp/.libs/libanyp.a \
+        /squid/src/base/.libs/libbase.a \
+        /squid/src/ip/.libs/libip.a \
+        /squid/src/sbuf/.libs/libsbuf.a \
+        /squid/lib/.libs/libmiscutil.a \
+        /squid/lib/.libs/libmiscencoding.a \
+        /squid/compat/.libs/libcompatsquid.a \
+        -Wl,--end-group \
+        $COMMON_SYSLIBS \
+        -o build/fuzz_tls_handshake && \
     echo "  OK"
 
 RUN echo "=== Built harnesses ===" && ls -la build/fuzz_* 2>/dev/null || echo "(none built)"
