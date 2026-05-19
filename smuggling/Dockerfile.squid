@@ -1,0 +1,8 @@
+FROM ubuntu/squid:latest
+
+# Remove default configs that include extra directives
+RUN rm -f /etc/squid/conf.d/*.conf
+
+# Config will be bind-mounted at runtime
+EXPOSE 3128
+CMD ["squid", "-f", "/etc/squid/squid.conf", "-N", "-d1"]

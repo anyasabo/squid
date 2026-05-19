@@ -1,0 +1,58 @@
+# HTTP Smuggling Differential Test Harness
+# Usage:
+#   docker compose up -d                         # starts with relaxed config
+#   SQUID_CONF=squid-strict.conf docker compose up -d  # strict mode
+#   python tests/test_smuggling.py               # run tests against the stack
+
+services:
+  squid:
+    build:
+      context: .
+      dockerfile: Dockerfile.squid
+    ports:
+      - "3128:3128"
+    volumes:
+      - ./${SQUID_CONF:-squid-relaxed.conf}:/etc/squid/squid.conf:ro
+    depends_on:
+      - echo-raw
+      - echo-go
+      - nginx
+    networks:
+      - smuggling
+
+  echo-raw:
+    build:
+      context: backends
+      dockerfile: Dockerfile.echo
+    expose:
+      - "8888"
+    networks:
+      smuggling:
+        aliases:
+          - echo-raw
+
+  echo-go:
+    build:
+      context: backends/go_echo
+      dockerfile: Dockerfile
+    expose:
+      - "8889"
+    networks:
+      smuggling:
+        aliases:
+          - echo-go
+
+  nginx:
+    image: openresty/openresty:1.25.3.1-alpine
+    volumes:
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+    expose:
+      - "8890"
+    networks:
+      smuggling:
+        aliases:
+          - nginx
+
+networks:
+  smuggling:
+    driver: bridge
