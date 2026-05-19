@@ -52,7 +52,10 @@ run-all:
 		"fuzz_uri_parser:uris:uri.dict" \
 		"fuzz_http_header_parser:http_headers:http.dict" \
 		"fuzz_content_length:content_lengths:http.dict" \
-		"fuzz_tls_handshake:tls_handshakes:tls.dict"; do \
+		"fuzz_tls_handshake:tls_handshakes:tls.dict" \
+		"fuzz_cache_control:cache_control:http.dict" \
+		"fuzz_dns_message:dns_messages:http.dict" \
+		"fuzz_ftp_parsing:ftp_parsing:http.dict"; do \
 		target=$$(echo $$triple | cut -d: -f1); \
 		seeds=$$(echo $$triple | cut -d: -f2); \
 		dict=$$(echo $$triple | cut -d: -f3); \
@@ -95,7 +98,10 @@ docker-run-all:
 		"fuzz_uri_parser:uris:uri.dict" \
 		"fuzz_http_header_parser:http_headers:http.dict" \
 		"fuzz_content_length:content_lengths:http.dict" \
-		"fuzz_tls_handshake:tls_handshakes:tls.dict"; do \
+		"fuzz_tls_handshake:tls_handshakes:tls.dict" \
+		"fuzz_cache_control:cache_control:http.dict" \
+		"fuzz_dns_message:dns_messages:http.dict" \
+		"fuzz_ftp_parsing:ftp_parsing:http.dict"; do \
 		target=$$(echo $$triple | cut -d: -f1); \
 		seeds=$$(echo $$triple | cut -d: -f2); \
 		dict=$$(echo $$triple | cut -d: -f3); \

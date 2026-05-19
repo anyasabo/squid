@@ -353,6 +353,39 @@ do_harnesses() {
         $SYSLIBS $FUZZER_LINK_LIB \
         -o "$BUILD_DIR/fuzz_tls_handshake"
 
+    # --- Cache-Control parser (HttpHdrCc::parse) ---
+    echo "  Compiling CC helper stubs..."
+    "$CXX" $OPT_FLAGS $SANITIZER_FLAGS $FUZZER_COMPILE -std=c++17 \
+        -DHAVE_CONFIG_H -DSTUB_THROWS $INC \
+        -c "$HARNESS_DIR/cc_helpers.cc" \
+        -o "$BUILD_DIR/cc_helpers.o"
+    echo "  Building fuzz_cache_control..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_cache_control.cc" \
+        $STUBS $S/tests/stub_libanyp.o \
+        $S/HttpHdrCc.o \
+        "$BUILD_DIR/cc_helpers.o" \
+        $LIBS $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_cache_control"
+
+    # --- DNS message parser (rfc1035MessageUnpack + rfc2671 for EDNS OPT) ---
+    echo "  Building fuzz_dns_message..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_dns_message.cc" \
+        $STUBS $S/tests/stub_libanyp.o \
+        $S/dns/rfc1035.o $S/dns/rfc2671.o \
+        $LIBS $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_dns_message"
+
+    # --- FTP address parsing ---
+    echo "  Building fuzz_ftp_parsing..."
+    "$CXX" $LINK_CXXFLAGS $INC \
+        "$HARNESS_DIR/fuzz_ftp_parsing.cc" \
+        $STUBS $S/tests/stub_libanyp.o \
+        $S/ftp/Parsing.o \
+        $LIBS $SYSLIBS $FUZZER_LINK_LIB \
+        -o "$BUILD_DIR/fuzz_ftp_parsing"
+
     echo ""
     echo "=== Built harnesses ==="
     ls -la "$BUILD_DIR"/fuzz_* 2>/dev/null || echo "No harnesses built."

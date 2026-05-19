@@ -51,7 +51,8 @@ strListGetItem(const String *str, char del, const char **item, int *ilen, const 
 
     *item = *pos;
 
-    len = strcspn(*pos, &del);
+    char delstr[2] = { del, '\0' };
+    len = strcspn(*pos, delstr);
     *pos += len;
 
     while (len > 0 && (*item)[len - 1] == ' ')
