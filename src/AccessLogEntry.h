@@ -190,6 +190,16 @@ public:
     HierarchyLogEntry hier;
     HttpReplyPointer reply;
     HttpRequest *request = nullptr; //< virgin HTTP request
+
+    /// Tunnel lifecycle details for access.log %note annotations
+    class TunnelDetails
+    {
+    public:
+        const char *closeReason = nullptr; ///< why the tunnel ended (e.g., "peer EOF", "client abort")
+        const char *closeSide = nullptr;   ///< which side initiated close ("client", "server", "squid")
+        const char *phase = nullptr;       ///< tunnel phase at close ("connecting", "shoveling", "idle")
+        int closeErrno = 0;               ///< errno at the point of close, if applicable
+    } tunnel;
     HttpRequest *adapted_request = nullptr; //< HTTP request after adaptation and redirection
 
     /// key:value pairs set by squid.conf note directive and

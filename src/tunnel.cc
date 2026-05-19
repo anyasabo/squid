@@ -349,6 +349,12 @@ TunnelStateData::serverClosed()
 {
     server.noteClosure();
 
+    if (al) {
+        al->tunnel.closeSide = "server";
+        al->tunnel.closeReason = "server connection closed";
+        al->tunnel.phase = committedToServer ? "shoveling" : "connecting";
+    }
+
     peeringTimer.stop();
 
     finishWritingAndDelete(client);
@@ -366,6 +372,13 @@ void
 TunnelStateData::clientClosed()
 {
     client.noteClosure();
+
+    if (al) {
+        al->tunnel.closeSide = "client";
+        al->tunnel.closeReason = "client connection closed";
+        al->tunnel.phase = committedToServer ? "shoveling" : "connecting";
+    }
+
     finishWritingAndDelete(server);
 }
 
@@ -927,6 +940,12 @@ tunnelTimeout(const CommTimeoutCbParams &io)
     /* Temporary lock to protect our own feet (comm_close -> tunnelClientClosed -> Free) */
     CbcPointer<TunnelStateData> safetyLock(tunnelState);
 
+    if (tunnelState->al) {
+        tunnelState->al->tunnel.closeReason = "timeout";
+        tunnelState->al->tunnel.closeSide = "squid";
+        tunnelState->al->tunnel.phase = tunnelState->committedToServer ? "shoveling" : "connecting";
+    }
+
     tunnelState->closeConnections();
 }
 
@@ -1103,11 +1122,11 @@ TunnelStateData::tunnelEstablishmentDone(Http::TunnelerAnswer &answer)
     peerWait.finish();
     server.len = 0;
 
-    // XXX: al->http.code (i.e. *status_ptr) should not be (re)set
-    // until we actually start responding to the client. Right here/now, we only
-    // know how this cache_peer has responded to us.
+    // Log the peer's response status for debugging but defer setting
+    // al->http.code (i.e. *status_ptr) until we actually respond to the
+    // client. The peer status reflects upstream communication only.
     if (answer.peerResponseStatus != Http::scNone)
-        *status_ptr = answer.peerResponseStatus;
+        debugs(26, 3, "peer responded with status " << answer.peerResponseStatus);
 
     auto sawProblem = false;
 
@@ -1422,17 +1441,27 @@ TunnelStateData::noteDestinationsEnd(ErrorState *selectionError)
     destinations->destinationsFinalized = true;
     if (!destinationsFound) {
 
-        // XXX: Honor clientExpectsConnectResponse() before replying.
-
-        if (selectionError)
-            return sendError(selectionError, "path selection has failed");
+        if (selectionError) {
+            if (clientExpectsConnectResponse())
+                return sendError(selectionError, "path selection has failed");
+            *status_ptr = selectionError->httpStatus;
+            delete selectionError;
+            return finishWritingAndDelete(client);
+        }
 
         // TODO: Merge with FwdState and remove this likely unnecessary check.
-        if (savedError)
-            return sendError(savedError, "path selection found no paths (with an impossible early error)");
+        if (savedError) {
+            if (clientExpectsConnectResponse())
+                return sendError(savedError, "path selection found no paths (with an impossible early error)");
+            *status_ptr = savedError->httpStatus;
+            return finishWritingAndDelete(client);
+        }
 
-        return sendError(new ErrorState(ERR_CANNOT_FORWARD, Http::scInternalServerError, request.getRaw(), al),
-                         "path selection found no paths");
+        if (clientExpectsConnectResponse())
+            return sendError(new ErrorState(ERR_CANNOT_FORWARD, Http::scInternalServerError, request.getRaw(), al),
+                             "path selection found no paths");
+        *status_ptr = Http::scInternalServerError;
+        return finishWritingAndDelete(client);
     }
     // else continue to use one of the previously noted destinations;
     // if all of them fail, tunneling as whole will fail
@@ -1461,8 +1490,12 @@ TunnelStateData::noteDestinationsEnd(ErrorState *selectionError)
         saveError(finalError);
     } // else use actual error from last forwarding attempt
 
-    // XXX: Honor clientExpectsConnectResponse() before replying.
-    sendError(savedError, "all found paths have failed");
+    if (clientExpectsConnectResponse()) {
+        sendError(savedError, "all found paths have failed");
+    } else {
+        *status_ptr = savedError->httpStatus;
+        finishWritingAndDelete(client);
+    }
 }
 
 /// Whether a tunneling attempt to some selected destination X is in progress
@@ -1554,9 +1587,13 @@ TunnelStateData::usePinned()
         debugs(26, 7, "pinned peer connection: " << serverConn);
     } catch (ErrorState * const error) {
         syncHierNote(nullptr, connManager ? connManager->pinning.host : request->url.host());
-        // XXX: Honor clientExpectsConnectResponse() before replying.
-        // a PINNED path failure is fatal; do not wait for more paths
-        sendError(error, "pinned path failure");
+        if (clientExpectsConnectResponse()) {
+            sendError(error, "pinned path failure");
+        } else {
+            *status_ptr = error->httpStatus;
+            delete error;
+            finishWritingAndDelete(client);
+        }
         return;
     }
 
