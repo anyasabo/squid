@@ -1,0 +1,9 @@
+.git
+fuzz/build
+fuzz/corpus
+**/*.o
+**/*.lo
+**/.libs
+**/.deps
+autom4te.cache
+tools/tla2tools.jar

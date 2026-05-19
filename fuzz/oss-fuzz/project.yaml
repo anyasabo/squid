@@ -1,0 +1,13 @@
+homepage: "http://www.squid-cache.org/"
+language: c++
+primary_contact: "squid-bugs@lists.squid-cache.org"
+auto_ccs:
+  - "squid-bugs@lists.squid-cache.org"
+main_repo: "https://github.com/squid-cache/squid.git"
+sanitizers:
+  - address
+  - undefined
+fuzzing_engines:
+  - libfuzzer
+  - afl
+  - honggfuzz

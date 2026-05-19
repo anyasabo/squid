@@ -1,0 +1,57 @@
+# TLS handshake fuzzing dictionary
+# Tokens from TLS record and handshake protocol (RFC 5246, 8446)
+
+# TLS record content types
+ct_change_cipher="\x14"
+ct_alert="\x15"
+ct_handshake="\x16"
+ct_application="\x17"
+
+# TLS versions in record layer
+ver_ssl30="\x03\x00"
+ver_tls10="\x03\x01"
+ver_tls11="\x03\x02"
+ver_tls12="\x03\x03"
+ver_tls13="\x03\x04"
+
+# Handshake types
+hs_client_hello="\x01"
+hs_server_hello="\x02"
+hs_certificate="\x0b"
+hs_server_key_exchange="\x0c"
+hs_server_hello_done="\x0e"
+hs_client_key_exchange="\x10"
+hs_finished="\x14"
+
+# Common cipher suites (2 bytes each)
+cs_aes128_cbc="\x00\x2f"
+cs_aes256_cbc="\x00\x35"
+cs_aes128_gcm="\x00\x9c"
+cs_aes256_gcm="\x00\x9d"
+cs_chacha20="\xcc\xa8"
+
+# Extensions (2 byte type)
+ext_sni="\x00\x00"
+ext_status_request="\x00\x05"
+ext_supported_groups="\x00\x0a"
+ext_ec_point_formats="\x00\x0b"
+ext_signature_algorithms="\x00\x0d"
+ext_heartbeat="\x00\x0f"
+ext_alpn="\x00\x10"
+ext_session_ticket="\x00\x23"
+ext_supported_versions="\x00\x2b"
+ext_psk_key_exchange_modes="\x00\x2d"
+
+# SNI name type
+sni_hostname="\x00"
+
+# Compression methods
+comp_null="\x00"
+comp_deflate="\x01"
+
+# ALPN values
+alpn_http11="http/1.1"
+alpn_h2="h2"
+
+# SSLv2 header byte (high bit set = 2-byte header)
+v2_header="\x80"

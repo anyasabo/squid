@@ -26,9 +26,17 @@
  *   #include "tests/STUB.h"
  */
 #include <iostream>
+#include <stdexcept>
 
-// Internal Special: the STUB framework requires this function
+// Internal Special: the STUB framework requires this function.
+// When STUB_THROWS is defined (e.g. for fuzz targets or long-running test
+// harnesses), throw an exception instead of calling exit(). This lets the
+// harness catch the error and continue rather than terminating the process.
+#if defined(STUB_THROWS)
+#define stub_fatal(m) { throw std::runtime_error(std::string("STUB: ") + (m) + " for use of " + __func__); }
+#else
 #define stub_fatal(m) { std::cerr<<"FATAL: "<<(m)<<" for use of "<<__func__<<"\n"; exit(EXIT_FAILURE); }
+#endif
 
 /// macro to stub a void function.
 #define STUB { stub_fatal(STUB_API " required"); }

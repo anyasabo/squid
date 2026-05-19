@@ -1,0 +1,8 @@
+Host: example.com
+Transfer-Encoding: chunked
+Content-Type: text/html
+Connection: keep-alive
+Accept: */*
+Accept-Encoding: gzip, deflate
+User-Agent: Mozilla/5.0
+
