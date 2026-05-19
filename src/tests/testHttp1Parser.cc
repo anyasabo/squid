@@ -32,6 +32,7 @@ class TestHttp1Parser : public CPPUNIT_NS::TestFixture
     CPPUNIT_TEST(testParseRequestLineTerminators);
     CPPUNIT_TEST(testParseRequestLineStrange);
     CPPUNIT_TEST(testParseRequestLineInvalid);
+    CPPUNIT_TEST(testObsFoldOnFramingHeaders);
     CPPUNIT_TEST_SUITE_END();
 
 protected:
@@ -47,6 +48,8 @@ protected:
     void testParseRequestLineInvalid();      // rejection of invalid lines happens
 
     void testDripFeed();  // test incremental parse works
+
+    void testObsFoldOnFramingHeaders();  // RFC 9112 Section 5.1
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION( TestHttp1Parser );
@@ -1192,6 +1195,116 @@ TestHttp1Parser::testDripFeed()
 
     } while (Config.onoff.relaxed_header_parser);
 
+}
+
+void
+TestHttp1Parser::testObsFoldOnFramingHeaders()
+{
+    globalSetup();
+
+    SBuf input;
+    Http1::RequestParser output;
+
+    // obs-fold on Content-Length: reject in strict mode (RFC 9112 Section 5.1)
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length:\r\n"
+            " 5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Content-Length: reject in relaxed mode too
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Content-Length:\r\n"
+            " 5\r\n"
+            "\r\n"
+            "hello"
+        );
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on Transfer-Encoding: reject
+    {
+        input = SBuf(
+            "POST /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "Transfer-Encoding:\r\n"
+            " chunked\r\n"
+            "\r\n"
+            "5\r\nhello\r\n0\r\n\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 0;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = false,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scBadRequest,
+            .suffixSz = input.length(),
+            .method = HttpRequestMethod(Http::METHOD_POST),
+            .uri = nullptr,
+            .version = AnyP::ProtocolVersion()
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    // obs-fold on non-framing header: accept (control case)
+    {
+        input = SBuf(
+            "GET /test HTTP/1.1\r\n"
+            "Host: example.com\r\n"
+            "X-Custom:\r\n"
+            " value\r\n"
+            "\r\n"
+        );
+        Config.onoff.relaxed_header_parser = 1;
+        output.clear();
+        struct resultSet expect = {
+            .parsed = true,
+            .needsMore = false,
+            .parserState = Http1::HTTP_PARSE_DONE,
+            .status = Http::scOkay,
+            .suffixSz = 0,
+            .method = HttpRequestMethod(Http::METHOD_GET),
+            .uri = "/test",
+            .version = AnyP::ProtocolVersion(AnyP::PROTO_HTTP,1,1)
+        };
+        testResults(__LINE__, input, output, expect);
+    }
+
+    Config.onoff.relaxed_header_parser = 0;
 }
 
 int

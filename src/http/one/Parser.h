@@ -160,6 +160,7 @@ protected:
 private:
     void cleanMimePrefix();
     void unfoldMime();
+    bool hasObsFoldedFramingHeader() const;
 };
 
 /// skips and, if needed, warns about RFC 7230 BWS ("bad" whitespace)
